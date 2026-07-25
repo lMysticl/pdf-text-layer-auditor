@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Verify tag matches project version
+        id: version
+        shell: bash
+        run: |
+          project_version="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)"
+          expected_tag="v${project_version}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match project version ${project_version}" >&2
+            exit 1
+          fi
+          echo "value=${project_version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build and test
+        run: mvn --batch-mode clean verify
+
+      - name: Create checksum
+        working-directory: target
+        run: sha256sum pdf-text-layer-auditor.jar > pdf-text-layer-auditor.jar.sha256
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          target/pdf-text-layer-auditor.jar
+          target/pdf-text-layer-auditor.jar.sha256
+          --verify-tag
+          --generate-notes
+          --title "PDF Text Layer Auditor ${{ steps.version.outputs.value }}"
