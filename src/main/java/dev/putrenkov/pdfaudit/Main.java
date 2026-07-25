@@ -20,7 +20,7 @@ public final class Main {
         try {
             options = CliOptions.parse(args);
         } catch (IllegalArgumentException exception) {
-            System.err.println(exception.getMessage());
+            System.err.println(TerminalText.escape(exception.getMessage()));
             printUsage(System.err);
             return 2;
         }
@@ -50,10 +50,11 @@ public final class Main {
             System.err.println("Cannot audit a password-protected PDF without a password.");
             return 2;
         } catch (IllegalArgumentException | SecurityException exception) {
-            System.err.println(exception.getMessage());
+            System.err.println(TerminalText.escape(exception.getMessage()));
             return 2;
         } catch (IOException exception) {
-            System.err.println("Could not read PDF: " + exception.getMessage());
+            System.err.println(
+                    "Could not read PDF: " + TerminalText.escape(exception.getMessage()));
             return 2;
         }
     }
