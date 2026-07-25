@@ -1,7 +1,7 @@
 package dev.putrenkov.pdfaudit;
 
 import java.io.IOException;
-import java.nio.file.Path;
+import java.io.PrintStream;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 
 public final class Main {
@@ -16,21 +16,27 @@ public final class Main {
     }
 
     static int run(String[] args) {
-        if (args.length == 1 && ("--help".equals(args[0]) || "-h".equals(args[0]))) {
-            printUsage();
-            return 0;
-        }
-
-        boolean jsonOutput = args.length == 2 && "--json".equals(args[0]);
-        if (args.length != 1 && !jsonOutput) {
-            printUsage();
+        CliOptions options;
+        try {
+            options = CliOptions.parse(args);
+        } catch (IllegalArgumentException exception) {
+            System.err.println(exception.getMessage());
+            printUsage(System.err);
             return 2;
         }
 
+        if (options.mode() == CliOptions.Mode.HELP) {
+            printUsage(System.out);
+            return 0;
+        }
+        if (options.mode() == CliOptions.Mode.VERSION) {
+            System.out.println("pdf-text-layer-auditor " + version());
+            return 0;
+        }
+
         try {
-            String fileArgument = jsonOutput ? args[1] : args[0];
-            AuditReport report = new PdfTextLayerAuditor().audit(Path.of(fileArgument));
-            if (jsonOutput) {
+            AuditReport report = new PdfTextLayerAuditor().audit(options.input());
+            if (options.outputFormat() == CliOptions.OutputFormat.JSON) {
                 new JsonReportPrinter().print(report, System.out);
             } else {
                 new TextReportPrinter().print(report, System.out);
@@ -48,17 +54,22 @@ public final class Main {
         }
     }
 
-    private static void printUsage() {
-        System.out.println("Usage: java -jar pdf-text-layer-auditor.jar <file.pdf>");
-        System.out.println("       java -jar pdf-text-layer-auditor.jar --json <file.pdf>");
-        System.out.println();
-        System.out.println("Options:");
-        System.out.println("  --json  Print a machine-readable JSON report");
-        System.out.println("  -h, --help  Show this help");
-        System.out.println();
-        System.out.println("Exit codes:");
-        System.out.println("  0  No basic text-layer problems detected");
-        System.out.println("  1  One or more pages need attention");
-        System.out.println("  2  Invalid arguments or the PDF could not be audited");
+    static String version() {
+        String implementationVersion = Main.class.getPackage().getImplementationVersion();
+        return implementationVersion == null ? "development" : implementationVersion;
+    }
+
+    private static void printUsage(PrintStream out) {
+        out.println("Usage: java -jar pdf-text-layer-auditor.jar [--json] <file.pdf>");
+        out.println();
+        out.println("Options:");
+        out.println("  --json     Print a machine-readable JSON report");
+        out.println("  --version  Show the installed version");
+        out.println("  -h, --help Show this help");
+        out.println();
+        out.println("Exit codes:");
+        out.println("  0  No basic text-layer problems detected");
+        out.println("  1  One or more pages need attention");
+        out.println("  2  Invalid arguments or the PDF could not be audited");
     }
 }

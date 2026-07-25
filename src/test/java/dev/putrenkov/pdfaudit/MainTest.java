@@ -46,4 +46,24 @@ class MainTest {
         assertTrue(json.contains("\"code\":\"NO_TEXT_LAYER\""));
         assertTrue(json.endsWith("]}"));
     }
+
+    @Test
+    @ResourceLock(Resources.SYSTEM_OUT)
+    void versionOptionPrintsDevelopmentIdentityInTests() {
+        PrintStream originalOut = System.out;
+        ByteArrayOutputStream capturedOutput = new ByteArrayOutputStream();
+        int exitCode;
+        try (PrintStream replacement =
+                new PrintStream(capturedOutput, true, StandardCharsets.UTF_8)) {
+            System.setOut(replacement);
+            exitCode = Main.run(new String[] {"--version"});
+        } finally {
+            System.setOut(originalOut);
+        }
+
+        assertEquals(0, exitCode);
+        assertEquals(
+                "pdf-text-layer-auditor development",
+                capturedOutput.toString(StandardCharsets.UTF_8).trim());
+    }
 }
