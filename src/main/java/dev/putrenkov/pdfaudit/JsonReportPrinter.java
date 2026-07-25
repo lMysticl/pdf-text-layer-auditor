@@ -16,6 +16,7 @@ public final class JsonReportPrinter {
         appendStringProperty(json, "file", report.file().toString());
         appendNumberProperty(json, "fileSizeBytes", report.fileSizeBytes());
         appendNumberProperty(json, "pageCount", report.pageCount());
+        appendNumberProperty(json, "inspectedPageCount", report.pages().size());
         appendBooleanProperty(json, "encrypted", report.encrypted());
         appendBooleanProperty(json, "extractionAllowed", report.extractionAllowed());
         appendDecimalProperty(

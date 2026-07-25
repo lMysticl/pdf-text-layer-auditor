@@ -8,7 +8,8 @@ public final class TextReportPrinter {
         out.println("PDF Text Layer Audit");
         out.println("File: " + report.file());
         out.printf(Locale.ROOT, "Size: %.2f MiB%n", report.fileSizeBytes() / 1024.0 / 1024.0);
-        out.println("Pages: " + report.pageCount());
+        out.println("Pages in document: " + report.pageCount());
+        out.println("Pages inspected: " + report.pages().size());
         out.println("Encrypted: " + report.encrypted());
         if (report.tinyTextThresholdPoints() == 0) {
             out.println("Tiny text threshold: disabled");
@@ -54,7 +55,7 @@ public final class TextReportPrinter {
                     Locale.ROOT,
                     "Result: %d of %d pages need attention%n",
                     report.pagesNeedingAttention(),
-                    report.pageCount());
+                    report.pages().size());
         } else {
             out.println("Result: no inspected text-layer problems were found");
         }
