@@ -1,0 +1,225 @@
+package dev.putrenkov.pdfaudit;
+
+import java.io.IOException;
+import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.io.IOUtils;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.pdfbox.text.TextPosition;
+
+public final class PdfTextLayerAuditor {
+    public static final long DEFAULT_MAX_FILE_SIZE_BYTES = 100L * 1024 * 1024;
+    public static final int DEFAULT_MAX_PAGE_COUNT = 1_000;
+
+    private final long maxFileSizeBytes;
+    private final int maxPageCount;
+
+    public PdfTextLayerAuditor() {
+        this(DEFAULT_MAX_FILE_SIZE_BYTES, DEFAULT_MAX_PAGE_COUNT);
+    }
+
+    public PdfTextLayerAuditor(long maxFileSizeBytes, int maxPageCount) {
+        if (maxFileSizeBytes <= 0) {
+            throw new IllegalArgumentException("maxFileSizeBytes must be positive");
+        }
+        if (maxPageCount <= 0) {
+            throw new IllegalArgumentException("maxPageCount must be positive");
+        }
+        this.maxFileSizeBytes = maxFileSizeBytes;
+        this.maxPageCount = maxPageCount;
+    }
+
+    public AuditReport audit(Path input) throws IOException {
+        Path file = input.toAbsolutePath().normalize();
+        if (!Files.isRegularFile(file)) {
+            throw new IllegalArgumentException("PDF file does not exist: " + file);
+        }
+
+        long fileSize = Files.size(file);
+        if (fileSize > maxFileSizeBytes) {
+            throw new IllegalArgumentException(
+                    "PDF exceeds the configured size limit of " + maxFileSizeBytes + " bytes");
+        }
+
+        try (PDDocument document = Loader.loadPDF(
+                file.toFile(),
+                IOUtils.createTempFileOnlyStreamCache())) {
+            int pageCount = document.getNumberOfPages();
+            if (pageCount == 0) {
+                throw new IllegalArgumentException("PDF contains no pages");
+            }
+            if (pageCount > maxPageCount) {
+                throw new IllegalArgumentException(
+                        "PDF exceeds the configured page limit of " + maxPageCount);
+            }
+
+            boolean extractionAllowed = document.getCurrentAccessPermission().canExtractContent();
+            if (!extractionAllowed) {
+                throw new SecurityException("PDF permissions do not allow text extraction");
+            }
+
+            PositionCollector collector = new PositionCollector(pageCount);
+            collector.writeText(document, Writer.nullWriter());
+
+            return new AuditReport(
+                    file,
+                    fileSize,
+                    pageCount,
+                    document.isEncrypted(),
+                    extractionAllowed,
+                    collector.pages());
+        }
+    }
+
+    private static final class PositionCollector extends PDFTextStripper {
+        private final List<MutablePage> pages;
+        private MutablePage currentPage;
+
+        private PositionCollector(int pageCount) {
+            pages = new ArrayList<>(pageCount);
+            for (int pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
+                pages.add(new MutablePage(pageNumber));
+            }
+            setSortByPosition(false);
+            setSuppressDuplicateOverlappingText(false);
+        }
+
+        @Override
+        protected void startPage(PDPage page) throws IOException {
+            super.startPage(page);
+            currentPage = pages.get(getCurrentPageNo() - 1);
+        }
+
+        @Override
+        protected void processTextPosition(TextPosition text) {
+            currentPage.accept(text);
+            super.processTextPosition(text);
+        }
+
+        @Override
+        protected void endPage(PDPage page) throws IOException {
+            currentPage = null;
+            super.endPage(page);
+        }
+
+        private List<PageAudit> pages() {
+            return pages.stream().map(MutablePage::freeze).toList();
+        }
+    }
+
+    private static final class MutablePage {
+        private final int pageNumber;
+        private final Map<FontKey, MutableFont> fonts = new LinkedHashMap<>();
+        private int glyphCount;
+        private int unicodeCharacterCount;
+        private int missingUnicodeGlyphCount;
+        private int replacementCharacterCount;
+        private int tinyTextGlyphCount;
+
+        private MutablePage(int pageNumber) {
+            this.pageNumber = pageNumber;
+        }
+
+        private void accept(TextPosition text) {
+            glyphCount++;
+
+            String unicode = text.getUnicode();
+            if (unicode == null || unicode.isEmpty()) {
+                missingUnicodeGlyphCount++;
+            } else {
+                unicodeCharacterCount += unicode.codePointCount(0, unicode.length());
+                replacementCharacterCount += (int) unicode.codePoints()
+                        .filter(codePoint -> codePoint == 0xFFFD)
+                        .count();
+            }
+
+            if (text.getFontSizeInPt() < 3.0f) {
+                tinyTextGlyphCount++;
+            }
+
+            PDFont font = text.getFont();
+            String fontName = displayName(font);
+            boolean embedded = font != null && font.isEmbedded();
+            boolean damaged = font != null && font.isDamaged();
+            FontKey key = new FontKey(fontName, embedded, damaged);
+            MutableFont fontAudit = fonts.computeIfAbsent(
+                    key,
+                    ignored -> new MutableFont(
+                            fontName,
+                            embedded,
+                            damaged));
+            fontAudit.glyphCount++;
+        }
+
+        private static String displayName(PDFont font) {
+            if (font == null) {
+                return "<unknown>";
+            }
+            String name = font.getName();
+            return name == null || name.isBlank() ? "<unnamed>" : name;
+        }
+
+        private PageAudit freeze() {
+            List<Finding> findings = new ArrayList<>();
+            if (glyphCount == 0) {
+                findings.add(Finding.NO_TEXT_LAYER);
+            }
+            if (missingUnicodeGlyphCount > 0) {
+                findings.add(Finding.MISSING_UNICODE);
+            }
+            if (replacementCharacterCount > 0) {
+                findings.add(Finding.REPLACEMENT_CHARACTERS);
+            }
+            if (tinyTextGlyphCount > 0) {
+                findings.add(Finding.TINY_TEXT);
+            }
+
+            List<FontAudit> fontAudits = fonts.values().stream()
+                    .map(MutableFont::freeze)
+                    .sorted(Comparator.comparing(FontAudit::name)
+                            .thenComparing(FontAudit::embedded)
+                            .thenComparing(FontAudit::damaged))
+                    .toList();
+
+            return new PageAudit(
+                    pageNumber,
+                    glyphCount,
+                    unicodeCharacterCount,
+                    missingUnicodeGlyphCount,
+                    replacementCharacterCount,
+                    tinyTextGlyphCount,
+                    fontAudits,
+                    findings);
+        }
+    }
+
+    private record FontKey(String name, boolean embedded, boolean damaged) {
+    }
+
+    private static final class MutableFont {
+        private final String name;
+        private final boolean embedded;
+        private final boolean damaged;
+        private int glyphCount;
+
+        private MutableFont(String name, boolean embedded, boolean damaged) {
+            this.name = name;
+            this.embedded = embedded;
+            this.damaged = damaged;
+        }
+
+        private FontAudit freeze() {
+            return new FontAudit(name, embedded, damaged, glyphCount);
+        }
+    }
+}
