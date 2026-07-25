@@ -6,7 +6,7 @@
 
     <groupId>dev.putrenkov</groupId>
     <artifactId>pdf-text-layer-auditor</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <name>PDF Text Layer Auditor</name>
     <description>Report basic native text-layer signals for PDF pages.</description>
     <url>https://github.com/lMysticl/pdf-text-layer-auditor</url>
