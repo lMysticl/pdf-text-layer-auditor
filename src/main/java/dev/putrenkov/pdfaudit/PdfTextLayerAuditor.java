@@ -20,23 +20,41 @@ import org.apache.pdfbox.text.TextPosition;
 public final class PdfTextLayerAuditor {
     public static final long DEFAULT_MAX_FILE_SIZE_BYTES = 100L * 1024 * 1024;
     public static final int DEFAULT_MAX_PAGE_COUNT = 1_000;
+    public static final float DEFAULT_TINY_TEXT_THRESHOLD_POINTS = 3.0f;
 
     private final long maxFileSizeBytes;
     private final int maxPageCount;
+    private final float tinyTextThresholdPoints;
 
     public PdfTextLayerAuditor() {
-        this(DEFAULT_MAX_FILE_SIZE_BYTES, DEFAULT_MAX_PAGE_COUNT);
+        this(
+                DEFAULT_MAX_FILE_SIZE_BYTES,
+                DEFAULT_MAX_PAGE_COUNT,
+                DEFAULT_TINY_TEXT_THRESHOLD_POINTS);
     }
 
     public PdfTextLayerAuditor(long maxFileSizeBytes, int maxPageCount) {
+        this(maxFileSizeBytes, maxPageCount, DEFAULT_TINY_TEXT_THRESHOLD_POINTS);
+    }
+
+    public PdfTextLayerAuditor(
+            long maxFileSizeBytes,
+            int maxPageCount,
+            float tinyTextThresholdPoints
+    ) {
         if (maxFileSizeBytes <= 0) {
             throw new IllegalArgumentException("maxFileSizeBytes must be positive");
         }
         if (maxPageCount <= 0) {
             throw new IllegalArgumentException("maxPageCount must be positive");
         }
+        if (!Float.isFinite(tinyTextThresholdPoints) || tinyTextThresholdPoints < 0) {
+            throw new IllegalArgumentException(
+                    "tinyTextThresholdPoints must be finite and non-negative");
+        }
         this.maxFileSizeBytes = maxFileSizeBytes;
         this.maxPageCount = maxPageCount;
+        this.tinyTextThresholdPoints = tinyTextThresholdPoints;
     }
 
     public AuditReport audit(Path input) throws IOException {
@@ -68,7 +86,8 @@ public final class PdfTextLayerAuditor {
                 throw new SecurityException("PDF permissions do not allow text extraction");
             }
 
-            PositionCollector collector = new PositionCollector(pageCount);
+            PositionCollector collector =
+                    new PositionCollector(pageCount, tinyTextThresholdPoints);
             collector.writeText(document, Writer.nullWriter());
 
             return new AuditReport(
@@ -77,6 +96,7 @@ public final class PdfTextLayerAuditor {
                     pageCount,
                     document.isEncrypted(),
                     extractionAllowed,
+                    tinyTextThresholdPoints,
                     collector.pages());
         }
     }
@@ -85,10 +105,10 @@ public final class PdfTextLayerAuditor {
         private final List<MutablePage> pages;
         private MutablePage currentPage;
 
-        private PositionCollector(int pageCount) {
+        private PositionCollector(int pageCount, float tinyTextThresholdPoints) {
             pages = new ArrayList<>(pageCount);
             for (int pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
-                pages.add(new MutablePage(pageNumber));
+                pages.add(new MutablePage(pageNumber, tinyTextThresholdPoints));
             }
             setSortByPosition(false);
             setSuppressDuplicateOverlappingText(false);
@@ -119,6 +139,7 @@ public final class PdfTextLayerAuditor {
 
     private static final class MutablePage {
         private final int pageNumber;
+        private final float tinyTextThresholdPoints;
         private final Map<FontKey, MutableFont> fonts = new LinkedHashMap<>();
         private int glyphCount;
         private int unicodeCharacterCount;
@@ -126,8 +147,9 @@ public final class PdfTextLayerAuditor {
         private int replacementCharacterCount;
         private int tinyTextGlyphCount;
 
-        private MutablePage(int pageNumber) {
+        private MutablePage(int pageNumber, float tinyTextThresholdPoints) {
             this.pageNumber = pageNumber;
+            this.tinyTextThresholdPoints = tinyTextThresholdPoints;
         }
 
         private void accept(TextPosition text) {
@@ -143,7 +165,8 @@ public final class PdfTextLayerAuditor {
                         .count();
             }
 
-            if (text.getFontSizeInPt() < 3.0f) {
+            if (tinyTextThresholdPoints > 0
+                    && text.getFontSizeInPt() < tinyTextThresholdPoints) {
                 tinyTextGlyphCount++;
             }
 

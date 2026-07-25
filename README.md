@@ -13,7 +13,7 @@ It is useful when a PDF looks correct but search, copy/paste, indexing, accessib
 - pages with no native text glyphs
 - glyphs without a usable Unicode mapping
 - Unicode replacement characters
-- suspiciously tiny text below 3 pt
+- suspiciously tiny text below a configurable threshold (3 pt by default)
 - fonts used on each page, including embedded and damaged status
 
 ## Quick start
@@ -44,6 +44,14 @@ java -jar target/pdf-text-layer-auditor.jar --json document.pdf
 ```
 
 JSON output includes the report summary, per-page metrics, font state, and findings. The default output remains human-readable.
+
+The tiny-text threshold defaults to 3 pt. Adjust it for a specific workflow, or use `0` to disable that finding:
+
+```bash
+java -jar target/pdf-text-layer-auditor.jar \
+  --tiny-text-threshold-pt 2.5 \
+  document.pdf
+```
 
 Check the installed build:
 

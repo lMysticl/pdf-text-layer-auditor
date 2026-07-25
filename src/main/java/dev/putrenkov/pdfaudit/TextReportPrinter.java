@@ -10,6 +10,14 @@ public final class TextReportPrinter {
         out.printf(Locale.ROOT, "Size: %.2f MiB%n", report.fileSizeBytes() / 1024.0 / 1024.0);
         out.println("Pages: " + report.pageCount());
         out.println("Encrypted: " + report.encrypted());
+        if (report.tinyTextThresholdPoints() == 0) {
+            out.println("Tiny text threshold: disabled");
+        } else {
+            out.printf(
+                    Locale.ROOT,
+                    "Tiny text threshold: %.2f pt%n",
+                    report.tinyTextThresholdPoints());
+        }
         out.println();
 
         for (PageAudit page : report.pages()) {
