@@ -18,6 +18,10 @@ public final class JsonReportPrinter {
         appendNumberProperty(json, "pageCount", report.pageCount());
         appendBooleanProperty(json, "encrypted", report.encrypted());
         appendBooleanProperty(json, "extractionAllowed", report.extractionAllowed());
+        appendDecimalProperty(
+                json,
+                "tinyTextThresholdPoints",
+                report.tinyTextThresholdPoints());
         appendBooleanProperty(json, "needsAttention", report.needsAttention());
         appendNumberProperty(json, "pagesNeedingAttention", report.pagesNeedingAttention());
         json.append(",\"pages\":[");
@@ -89,6 +93,11 @@ public final class JsonReportPrinter {
     private static void appendBooleanProperty(StringBuilder json, String name, boolean value) {
         appendPropertyPrefix(json, name);
         json.append(value);
+    }
+
+    private static void appendDecimalProperty(StringBuilder json, String name, float value) {
+        appendPropertyPrefix(json, name);
+        json.append(Float.toString(value));
     }
 
     private static void appendPropertyPrefix(StringBuilder json, String name) {

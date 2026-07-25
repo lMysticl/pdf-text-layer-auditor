@@ -2,6 +2,7 @@ package dev.putrenkov.pdfaudit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -114,6 +115,55 @@ class PdfTextLayerAuditorTest {
         assertEquals(2, fonts.size());
         assertEquals(List.of("Helvetica", "Helvetica"), fonts.stream().map(FontAudit::name).toList());
         assertEquals(List.of(false, true), fonts.stream().map(FontAudit::embedded).toList());
+    }
+
+    @Test
+    void appliesConfiguredTinyTextThreshold() throws IOException {
+        Path pdf = temporaryDirectory.resolve("small-text.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(
+                        new PDType1Font(Standard14Fonts.FontName.HELVETICA),
+                        2.5f);
+                content.newLineAtOffset(72, 720);
+                content.showText("small");
+                content.endText();
+            }
+            document.save(pdf.toFile());
+        }
+
+        AuditReport defaultReport = new PdfTextLayerAuditor().audit(pdf);
+        AuditReport lowerThresholdReport = new PdfTextLayerAuditor(
+                PdfTextLayerAuditor.DEFAULT_MAX_FILE_SIZE_BYTES,
+                PdfTextLayerAuditor.DEFAULT_MAX_PAGE_COUNT,
+                2.0f)
+                .audit(pdf);
+        AuditReport disabledReport = new PdfTextLayerAuditor(
+                PdfTextLayerAuditor.DEFAULT_MAX_FILE_SIZE_BYTES,
+                PdfTextLayerAuditor.DEFAULT_MAX_PAGE_COUNT,
+                0.0f)
+                .audit(pdf);
+
+        assertTrue(defaultReport.pages().getFirst().findings().contains(Finding.TINY_TEXT));
+        assertFalse(lowerThresholdReport.pages().getFirst().findings().contains(Finding.TINY_TEXT));
+        assertFalse(disabledReport.pages().getFirst().findings().contains(Finding.TINY_TEXT));
+        assertEquals(2.0f, lowerThresholdReport.tinyTextThresholdPoints());
+    }
+
+    @Test
+    void rejectsInvalidTinyTextThreshold() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PdfTextLayerAuditor(100, 10, -1.0f));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PdfTextLayerAuditor(100, 10, Float.NaN));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PdfTextLayerAuditor(100, 10, Float.POSITIVE_INFINITY));
     }
 
     private static void addTwoFontPage(PDDocument document, PDType3Font type3Font)

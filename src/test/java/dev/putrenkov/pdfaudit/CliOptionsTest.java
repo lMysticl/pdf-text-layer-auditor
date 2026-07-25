@@ -20,6 +20,9 @@ class CliOptionsTest {
         assertEquals(
                 PdfTextLayerAuditor.DEFAULT_MAX_PAGE_COUNT,
                 options.maxPageCount());
+        assertEquals(
+                PdfTextLayerAuditor.DEFAULT_TINY_TEXT_THRESHOLD_POINTS,
+                options.tinyTextThresholdPoints());
     }
 
     @Test
@@ -82,6 +85,38 @@ class CliOptionsTest {
                 () -> CliOptions.parse(new String[] {"--json", "--json", "document.pdf"}));
 
         assertEquals("--json may only be specified once", exception.getMessage());
+    }
+
+    @Test
+    void parsesConfiguredTinyTextThreshold() {
+        assertEquals(
+                2.5f,
+                CliOptions.parse(new String[] {
+                    "--tiny-text-threshold-pt", "2.5", "document.pdf"
+                }).tinyTextThresholdPoints());
+        assertEquals(
+                0.0f,
+                CliOptions.parse(new String[] {
+                    "--tiny-text-threshold-pt", "0", "document.pdf"
+                }).tinyTextThresholdPoints());
+    }
+
+    @Test
+    void rejectsInvalidTinyTextThreshold() {
+        for (String value : new String[] {"small", "-1", "NaN", "Infinity", "1e100"}) {
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> CliOptions.parse(new String[] {
+                        "--tiny-text-threshold-pt", value, "document.pdf"
+                    }));
+        }
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> CliOptions.parse(new String[] {
+                    "--tiny-text-threshold-pt", "2",
+                    "--tiny-text-threshold-pt", "3",
+                    "document.pdf"
+                }));
     }
 
     @Test

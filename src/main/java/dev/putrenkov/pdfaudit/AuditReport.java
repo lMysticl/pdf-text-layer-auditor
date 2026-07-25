@@ -9,9 +9,14 @@ public record AuditReport(
         int pageCount,
         boolean encrypted,
         boolean extractionAllowed,
+        float tinyTextThresholdPoints,
         List<PageAudit> pages
 ) {
     public AuditReport {
+        if (!Float.isFinite(tinyTextThresholdPoints) || tinyTextThresholdPoints < 0) {
+            throw new IllegalArgumentException(
+                    "tinyTextThresholdPoints must be finite and non-negative");
+        }
         pages = List.copyOf(pages);
     }
 

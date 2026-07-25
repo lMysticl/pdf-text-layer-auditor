@@ -24,11 +24,13 @@ class JsonReportPrinterTest {
                 1,
                 false,
                 true,
+                3.0f,
                 List.of(page));
 
         assertEquals(
                 "{\"file\":\"document.pdf\",\"fileSizeBytes\":123,\"pageCount\":1,"
                         + "\"encrypted\":false,\"extractionAllowed\":true,"
+                        + "\"tinyTextThresholdPoints\":3.0,"
                         + "\"needsAttention\":true,\"pagesNeedingAttention\":1,"
                         + "\"pages\":[{\"pageNumber\":1,\"glyphCount\":4,"
                         + "\"unicodeCharacterCount\":3,\"missingUnicodeGlyphCount\":1,"
@@ -49,11 +51,13 @@ class JsonReportPrinterTest {
                 0,
                 false,
                 true,
+                0.0f,
                 List.of());
 
         assertEquals(
                 "{\"file\":\"document.pdf\",\"fileSizeBytes\":0,\"pageCount\":0,"
                         + "\"encrypted\":false,\"extractionAllowed\":true,"
+                        + "\"tinyTextThresholdPoints\":0.0,"
                         + "\"needsAttention\":false,\"pagesNeedingAttention\":0,\"pages\":[]}",
                 JsonReportPrinter.toJson(report));
     }

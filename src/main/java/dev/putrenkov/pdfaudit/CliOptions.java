@@ -8,7 +8,8 @@ record CliOptions(
         Path input,
         OutputFormat outputFormat,
         long maxFileSizeBytes,
-        int maxPageCount
+        int maxPageCount,
+        float tinyTextThresholdPoints
 ) {
     private static final long BYTES_PER_MEBIBYTE = 1024L * 1024;
 
@@ -27,8 +28,11 @@ record CliOptions(
         boolean json = false;
         boolean maxFileSizeSpecified = false;
         boolean maxPageCountSpecified = false;
+        boolean tinyTextThresholdSpecified = false;
         long maxFileSizeBytes = PdfTextLayerAuditor.DEFAULT_MAX_FILE_SIZE_BYTES;
         int maxPageCount = PdfTextLayerAuditor.DEFAULT_MAX_PAGE_COUNT;
+        float tinyTextThresholdPoints =
+                PdfTextLayerAuditor.DEFAULT_TINY_TEXT_THRESHOLD_POINTS;
         Path input = null;
         for (int index = 0; index < arguments.length; index++) {
             String argument = arguments[index];
@@ -61,6 +65,15 @@ record CliOptions(
                     maxPageCount = parsePositiveInt(value, argument);
                     maxPageCountSpecified = true;
                 }
+                case "--tiny-text-threshold-pt" -> {
+                    if (tinyTextThresholdSpecified) {
+                        throw new IllegalArgumentException(
+                                "--tiny-text-threshold-pt may only be specified once");
+                    }
+                    String value = requireValue(arguments, ++index, argument);
+                    tinyTextThresholdPoints = parseNonNegativeFloat(value, argument);
+                    tinyTextThresholdSpecified = true;
+                }
                 case "--help", "-h", "--version" ->
                         throw new IllegalArgumentException(argument + " must be used alone");
                 default -> {
@@ -84,7 +97,8 @@ record CliOptions(
                 input,
                 json ? OutputFormat.JSON : OutputFormat.TEXT,
                 maxFileSizeBytes,
-                maxPageCount);
+                maxPageCount,
+                tinyTextThresholdPoints);
     }
 
     private static CliOptions standalone(Mode mode) {
@@ -93,7 +107,8 @@ record CliOptions(
                 null,
                 OutputFormat.TEXT,
                 PdfTextLayerAuditor.DEFAULT_MAX_FILE_SIZE_BYTES,
-                PdfTextLayerAuditor.DEFAULT_MAX_PAGE_COUNT);
+                PdfTextLayerAuditor.DEFAULT_MAX_PAGE_COUNT,
+                PdfTextLayerAuditor.DEFAULT_TINY_TEXT_THRESHOLD_POINTS);
     }
 
     private static String requireValue(String[] arguments, int index, String option) {
@@ -126,6 +141,19 @@ record CliOptions(
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException(
                     option + " must be a positive integer within the supported range");
+        }
+    }
+
+    private static float parseNonNegativeFloat(String value, String option) {
+        try {
+            float parsed = Float.parseFloat(value);
+            if (!Float.isFinite(parsed) || parsed < 0) {
+                throw new NumberFormatException();
+            }
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    option + " must be a finite, non-negative number");
         }
     }
 

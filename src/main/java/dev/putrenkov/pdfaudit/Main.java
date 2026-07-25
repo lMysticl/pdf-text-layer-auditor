@@ -37,7 +37,8 @@ public final class Main {
         try {
             AuditReport report = new PdfTextLayerAuditor(
                     options.maxFileSizeBytes(),
-                    options.maxPageCount())
+                    options.maxPageCount(),
+                    options.tinyTextThresholdPoints())
                     .audit(options.input());
             if (options.outputFormat() == CliOptions.OutputFormat.JSON) {
                 new JsonReportPrinter().print(report, System.out);
@@ -69,6 +70,7 @@ public final class Main {
         out.println("  --json                     Print a machine-readable JSON report");
         out.println("  --max-file-size-mib <MiB>  Set the input-size limit (default: 100)");
         out.println("  --max-pages <count>        Set the page-count limit (default: 1000)");
+        out.println("  --tiny-text-threshold-pt <pt> Set threshold (default: 3; 0 disables)");
         out.println("  --version                  Show the installed version");
         out.println("  -h, --help                 Show this help");
         out.println();
