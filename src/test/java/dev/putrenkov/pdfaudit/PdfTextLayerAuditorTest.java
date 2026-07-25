@@ -23,6 +23,9 @@ import org.apache.pdfbox.pdmodel.common.PDStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.PDType3Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
+import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.util.Matrix;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -223,6 +226,56 @@ class PdfTextLayerAuditorTest {
         assertEquals(
                 "Requested page 2 exceeds document page count of 1",
                 exception.getMessage());
+    }
+
+    @Test
+    void auditsEncryptedPdfWhenExtractionIsAllowed() throws IOException {
+        Path pdf = createEncryptedPdf("allowed.pdf", "", true);
+
+        AuditReport report = new PdfTextLayerAuditor().audit(pdf);
+
+        assertTrue(report.encrypted());
+        assertTrue(report.extractionAllowed());
+    }
+
+    @Test
+    void rejectsPasswordProtectedPdfWithoutPassword() throws IOException {
+        Path pdf = createEncryptedPdf("password.pdf", "user-password", true);
+
+        assertThrows(
+                InvalidPasswordException.class,
+                () -> new PdfTextLayerAuditor().audit(pdf));
+    }
+
+    @Test
+    void rejectsPdfWhenExtractionPermissionIsDisabled() throws IOException {
+        Path pdf = createEncryptedPdf("restricted.pdf", "", false);
+
+        SecurityException exception = assertThrows(
+                SecurityException.class,
+                () -> new PdfTextLayerAuditor().audit(pdf));
+
+        assertEquals("PDF permissions do not allow text extraction", exception.getMessage());
+    }
+
+    private Path createEncryptedPdf(
+            String fileName,
+            String userPassword,
+            boolean extractionAllowed
+    ) throws IOException {
+        Path pdf = temporaryDirectory.resolve(fileName);
+        try (PDDocument document = new PDDocument()) {
+            document.addPage(new PDPage());
+            AccessPermission permissions = new AccessPermission();
+            permissions.setCanExtractContent(extractionAllowed);
+            StandardProtectionPolicy policy =
+                    new StandardProtectionPolicy("owner-password", userPassword, permissions);
+            policy.setEncryptionKeyLength(128);
+            policy.setPreferAES(true);
+            document.protect(policy);
+            document.save(pdf.toFile());
+        }
+        return pdf;
     }
 
     private static void addTwoFontPage(PDDocument document, PDType3Font type3Font)
