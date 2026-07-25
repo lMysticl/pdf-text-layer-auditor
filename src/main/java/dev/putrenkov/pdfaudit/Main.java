@@ -16,14 +16,25 @@ public final class Main {
     }
 
     static int run(String[] args) {
-        if (args.length != 1 || "--help".equals(args[0]) || "-h".equals(args[0])) {
+        if (args.length == 1 && ("--help".equals(args[0]) || "-h".equals(args[0]))) {
             printUsage();
-            return args.length == 1 ? 0 : 2;
+            return 0;
+        }
+
+        boolean jsonOutput = args.length == 2 && "--json".equals(args[0]);
+        if (args.length != 1 && !jsonOutput) {
+            printUsage();
+            return 2;
         }
 
         try {
-            AuditReport report = new PdfTextLayerAuditor().audit(Path.of(args[0]));
-            new TextReportPrinter().print(report, System.out);
+            String fileArgument = jsonOutput ? args[1] : args[0];
+            AuditReport report = new PdfTextLayerAuditor().audit(Path.of(fileArgument));
+            if (jsonOutput) {
+                new JsonReportPrinter().print(report, System.out);
+            } else {
+                new TextReportPrinter().print(report, System.out);
+            }
             return report.needsAttention() ? 1 : 0;
         } catch (InvalidPasswordException exception) {
             System.err.println("Cannot audit a password-protected PDF without a password.");
@@ -39,6 +50,11 @@ public final class Main {
 
     private static void printUsage() {
         System.out.println("Usage: java -jar pdf-text-layer-auditor.jar <file.pdf>");
+        System.out.println("       java -jar pdf-text-layer-auditor.jar --json <file.pdf>");
+        System.out.println();
+        System.out.println("Options:");
+        System.out.println("  --json  Print a machine-readable JSON report");
+        System.out.println("  -h, --help  Show this help");
         System.out.println();
         System.out.println("Exit codes:");
         System.out.println("  0  No basic text-layer problems detected");
