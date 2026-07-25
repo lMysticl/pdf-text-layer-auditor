@@ -2,6 +2,7 @@ package dev.putrenkov.pdfaudit;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Objects;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 
 public final class Main {
@@ -16,22 +17,29 @@ public final class Main {
     }
 
     static int run(String[] args) {
+        return run(args, System.out, System.err);
+    }
+
+    static int run(String[] args, PrintStream out, PrintStream err) {
+        Objects.requireNonNull(out, "out");
+        Objects.requireNonNull(err, "err");
+
         CliOptions options;
         try {
             options = CliOptions.parse(args);
         } catch (IllegalArgumentException exception) {
-            System.err.println(TerminalText.escape(exception.getMessage()));
-            printUsage(System.err);
+            err.println(TerminalText.escape(exception.getMessage()));
+            printUsage(err);
             return 2;
         }
 
         if (options.mode() == CliOptions.Mode.HELP) {
-            printUsage(System.out);
-            return 0;
+            printUsage(out);
+            return completeOutput(out, err, 0);
         }
         if (options.mode() == CliOptions.Mode.VERSION) {
-            System.out.println("pdf-text-layer-auditor " + version());
-            return 0;
+            out.println("pdf-text-layer-auditor " + version());
+            return completeOutput(out, err, 0);
         }
 
         try {
@@ -41,22 +49,30 @@ public final class Main {
                     options.tinyTextThresholdPoints())
                     .audit(options.input(), options.pageSelection());
             if (options.outputFormat() == CliOptions.OutputFormat.JSON) {
-                new JsonReportPrinter().print(report, System.out);
+                new JsonReportPrinter().print(report, out);
             } else {
-                new TextReportPrinter().print(report, System.out);
+                new TextReportPrinter().print(report, out);
             }
-            return report.needsAttention() ? 1 : 0;
+            return completeOutput(out, err, report.needsAttention() ? 1 : 0);
         } catch (InvalidPasswordException exception) {
-            System.err.println("Cannot audit a password-protected PDF without a password.");
+            err.println("Cannot audit a password-protected PDF without a password.");
             return 2;
         } catch (IllegalArgumentException | SecurityException exception) {
-            System.err.println(TerminalText.escape(exception.getMessage()));
+            err.println(TerminalText.escape(exception.getMessage()));
             return 2;
         } catch (IOException exception) {
-            System.err.println(
+            err.println(
                     "Could not read PDF: " + TerminalText.escape(exception.getMessage()));
             return 2;
         }
+    }
+
+    private static int completeOutput(PrintStream out, PrintStream err, int successCode) {
+        if (!out.checkError()) {
+            return successCode;
+        }
+        err.println("Could not write command output.");
+        return 2;
     }
 
     static String version() {
@@ -79,6 +95,6 @@ public final class Main {
         out.println("Exit codes:");
         out.println("  0  No basic text-layer problems detected");
         out.println("  1  One or more pages need attention");
-        out.println("  2  Invalid arguments or the PDF could not be audited");
+        out.println("  2  Invalid arguments, audit failure, or output failure");
     }
 }

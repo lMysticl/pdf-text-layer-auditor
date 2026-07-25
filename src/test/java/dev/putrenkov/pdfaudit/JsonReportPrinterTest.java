@@ -79,4 +79,24 @@ class JsonReportPrinterTest {
                         + "\"needsAttention\":false,\"pagesNeedingAttention\":0,\"pages\":[]}",
                 JsonReportPrinter.toJson(report));
     }
+
+    @Test
+    void versionOneSchemaRemainsCompatibleWithExtractionDeniedReports() throws Exception {
+        String schemaDocument = Files.readString(Path.of("docs", "report-schema-v1.json"));
+        SchemaRegistry registry =
+                SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12);
+        AuditReport report = new AuditReport(
+                Path.of("document.pdf"),
+                123,
+                1,
+                true,
+                false,
+                3.0f,
+                List.of());
+        String json = JsonReportPrinter.toJson(report);
+
+        var errors = registry.getSchema(schemaDocument).validate(json, InputFormat.JSON);
+
+        assertTrue(errors.isEmpty(), errors::toString);
+    }
 }
