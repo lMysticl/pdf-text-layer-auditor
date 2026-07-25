@@ -125,6 +125,8 @@ mvn verify
 
 The tests create small synthetic PDFs at runtime, so the repository does not need large binary fixtures.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a fixture, issue, or pull request. Report suspected vulnerabilities through the private process in [SECURITY.md](SECURITY.md).
+
 ## License
 
 Licensed under the Apache License, Version 2.0.

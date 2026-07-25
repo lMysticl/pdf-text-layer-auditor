@@ -1,0 +1,59 @@
+name: Bug report
+description: Report reproducible incorrect behavior
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach confidential PDFs. Prefer a synthetic fixture that reproduces the problem.
+  - type: input
+    id: version
+    attributes:
+      label: Auditor version
+      description: Output of `java -jar pdf-text-layer-auditor.jar --version`
+      placeholder: pdf-text-layer-auditor 0.2.0
+    validations:
+      required: true
+  - type: input
+    id: java
+    attributes:
+      label: Java version
+      description: Output of `java -version`
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and exit code
+      description: Include the exact command, exit code, and relevant output.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Explain how to create a synthetic PDF or attach a safely redacted fixture.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Data safety
+      options:
+        - label: I confirmed that the reproduction contains no confidential or personal data.
+          required: true
