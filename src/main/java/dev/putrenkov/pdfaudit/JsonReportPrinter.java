@@ -4,6 +4,8 @@ import java.io.PrintStream;
 import java.util.Objects;
 
 public final class JsonReportPrinter {
+    public static final int SCHEMA_VERSION = 1;
+
     public void print(AuditReport report, PrintStream out) {
         Objects.requireNonNull(report, "report");
         Objects.requireNonNull(out, "out");
@@ -13,6 +15,7 @@ public final class JsonReportPrinter {
     static String toJson(AuditReport report) {
         StringBuilder json = new StringBuilder(512);
         json.append('{');
+        appendNumberProperty(json, "schemaVersion", SCHEMA_VERSION);
         appendStringProperty(json, "file", report.file().toString());
         appendNumberProperty(json, "fileSizeBytes", report.fileSizeBytes());
         appendNumberProperty(json, "pageCount", report.pageCount());

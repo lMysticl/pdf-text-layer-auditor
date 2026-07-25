@@ -43,7 +43,7 @@ Emit a machine-readable report:
 java -jar target/pdf-text-layer-auditor.jar --json document.pdf
 ```
 
-JSON output includes the report summary, per-page metrics, font state, and findings. The default output remains human-readable.
+JSON output includes the report summary, per-page metrics, font state, and findings. Every document declares `schemaVersion`; the strict [version 1 JSON Schema](docs/report-schema-v1.json) is published with the repository. The default output remains human-readable.
 
 The tiny-text threshold defaults to 3 pt. Adjust it for a specific workflow, or use `0` to disable that finding:
 
