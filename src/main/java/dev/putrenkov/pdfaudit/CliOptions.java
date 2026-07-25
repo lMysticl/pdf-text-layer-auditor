@@ -9,7 +9,8 @@ record CliOptions(
         OutputFormat outputFormat,
         long maxFileSizeBytes,
         int maxPageCount,
-        float tinyTextThresholdPoints
+        float tinyTextThresholdPoints,
+        PageSelection pageSelection
 ) {
     private static final long BYTES_PER_MEBIBYTE = 1024L * 1024;
 
@@ -29,10 +30,12 @@ record CliOptions(
         boolean maxFileSizeSpecified = false;
         boolean maxPageCountSpecified = false;
         boolean tinyTextThresholdSpecified = false;
+        boolean pageSelectionSpecified = false;
         long maxFileSizeBytes = PdfTextLayerAuditor.DEFAULT_MAX_FILE_SIZE_BYTES;
         int maxPageCount = PdfTextLayerAuditor.DEFAULT_MAX_PAGE_COUNT;
         float tinyTextThresholdPoints =
                 PdfTextLayerAuditor.DEFAULT_TINY_TEXT_THRESHOLD_POINTS;
+        PageSelection pageSelection = PageSelection.all();
         Path input = null;
         for (int index = 0; index < arguments.length; index++) {
             String argument = arguments[index];
@@ -74,6 +77,15 @@ record CliOptions(
                     tinyTextThresholdPoints = parseNonNegativeFloat(value, argument);
                     tinyTextThresholdSpecified = true;
                 }
+                case "--pages" -> {
+                    if (pageSelectionSpecified) {
+                        throw new IllegalArgumentException(
+                                "--pages may only be specified once");
+                    }
+                    String value = requireValue(arguments, ++index, argument);
+                    pageSelection = PageSelection.parse(value);
+                    pageSelectionSpecified = true;
+                }
                 case "--help", "-h", "--version" ->
                         throw new IllegalArgumentException(argument + " must be used alone");
                 default -> {
@@ -98,7 +110,8 @@ record CliOptions(
                 json ? OutputFormat.JSON : OutputFormat.TEXT,
                 maxFileSizeBytes,
                 maxPageCount,
-                tinyTextThresholdPoints);
+                tinyTextThresholdPoints,
+                pageSelection);
     }
 
     private static CliOptions standalone(Mode mode) {
@@ -108,7 +121,8 @@ record CliOptions(
                 OutputFormat.TEXT,
                 PdfTextLayerAuditor.DEFAULT_MAX_FILE_SIZE_BYTES,
                 PdfTextLayerAuditor.DEFAULT_MAX_PAGE_COUNT,
-                PdfTextLayerAuditor.DEFAULT_TINY_TEXT_THRESHOLD_POINTS);
+                PdfTextLayerAuditor.DEFAULT_TINY_TEXT_THRESHOLD_POINTS,
+                PageSelection.all());
     }
 
     private static String requireValue(String[] arguments, int index, String option) {

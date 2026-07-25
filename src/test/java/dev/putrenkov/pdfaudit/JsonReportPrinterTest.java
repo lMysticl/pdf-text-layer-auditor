@@ -29,6 +29,7 @@ class JsonReportPrinterTest {
 
         assertEquals(
                 "{\"file\":\"document.pdf\",\"fileSizeBytes\":123,\"pageCount\":1,"
+                        + "\"inspectedPageCount\":1,"
                         + "\"encrypted\":false,\"extractionAllowed\":true,"
                         + "\"tinyTextThresholdPoints\":3.0,"
                         + "\"needsAttention\":true,\"pagesNeedingAttention\":1,"
@@ -56,6 +57,7 @@ class JsonReportPrinterTest {
 
         assertEquals(
                 "{\"file\":\"document.pdf\",\"fileSizeBytes\":0,\"pageCount\":0,"
+                        + "\"inspectedPageCount\":0,"
                         + "\"encrypted\":false,\"extractionAllowed\":true,"
                         + "\"tinyTextThresholdPoints\":0.0,"
                         + "\"needsAttention\":false,\"pagesNeedingAttention\":0,\"pages\":[]}",

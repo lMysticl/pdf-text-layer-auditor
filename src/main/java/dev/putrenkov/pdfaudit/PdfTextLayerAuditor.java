@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -58,6 +59,13 @@ public final class PdfTextLayerAuditor {
     }
 
     public AuditReport audit(Path input) throws IOException {
+        return audit(input, PageSelection.all());
+    }
+
+    public AuditReport audit(Path input, PageSelection pageSelection) throws IOException {
+        if (pageSelection == null) {
+            throw new IllegalArgumentException("pageSelection must not be null");
+        }
         Path file = input.toAbsolutePath().normalize();
         if (!Files.isRegularFile(file)) {
             throw new IllegalArgumentException("PDF file does not exist: " + file);
@@ -86,8 +94,10 @@ public final class PdfTextLayerAuditor {
                 throw new SecurityException("PDF permissions do not allow text extraction");
             }
 
-            PositionCollector collector =
-                    new PositionCollector(pageCount, tinyTextThresholdPoints);
+            List<Integer> selectedPages = pageSelection.resolve(pageCount);
+            PositionCollector collector = new PositionCollector(
+                    selectedPages,
+                    tinyTextThresholdPoints);
             collector.writeText(document, Writer.nullWriter());
 
             return new AuditReport(
@@ -102,22 +112,35 @@ public final class PdfTextLayerAuditor {
     }
 
     private static final class PositionCollector extends PDFTextStripper {
-        private final List<MutablePage> pages;
+        private final Map<Integer, MutablePage> pages = new LinkedHashMap<>();
+        private final Set<Integer> selectedPageNumbers;
         private MutablePage currentPage;
 
-        private PositionCollector(int pageCount, float tinyTextThresholdPoints) {
-            pages = new ArrayList<>(pageCount);
-            for (int pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
-                pages.add(new MutablePage(pageNumber, tinyTextThresholdPoints));
+        private PositionCollector(
+                List<Integer> selectedPages,
+                float tinyTextThresholdPoints
+        ) {
+            selectedPageNumbers = Set.copyOf(selectedPages);
+            for (int pageNumber : selectedPages) {
+                pages.put(
+                        pageNumber,
+                        new MutablePage(pageNumber, tinyTextThresholdPoints));
             }
             setSortByPosition(false);
             setSuppressDuplicateOverlappingText(false);
         }
 
         @Override
+        public void processPage(PDPage page) throws IOException {
+            if (selectedPageNumbers.contains(getCurrentPageNo())) {
+                super.processPage(page);
+            }
+        }
+
+        @Override
         protected void startPage(PDPage page) throws IOException {
             super.startPage(page);
-            currentPage = pages.get(getCurrentPageNo() - 1);
+            currentPage = pages.get(getCurrentPageNo());
         }
 
         @Override
@@ -133,7 +156,7 @@ public final class PdfTextLayerAuditor {
         }
 
         private List<PageAudit> pages() {
-            return pages.stream().map(MutablePage::freeze).toList();
+            return pages.values().stream().map(MutablePage::freeze).toList();
         }
     }
 

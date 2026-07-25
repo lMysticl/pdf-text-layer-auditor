@@ -166,6 +166,65 @@ class PdfTextLayerAuditorTest {
                 () -> new PdfTextLayerAuditor(100, 10, Float.POSITIVE_INFINITY));
     }
 
+    @Test
+    void auditsOnlySelectedPages() throws IOException {
+        Path pdf = temporaryDirectory.resolve("selected-pages.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage unselectedTextPage = new PDPage();
+            document.addPage(unselectedTextPage);
+            try (PDPageContentStream content =
+                    new PDPageContentStream(document, unselectedTextPage)) {
+                content.beginText();
+                content.setFont(
+                        new PDType1Font(Standard14Fonts.FontName.HELVETICA),
+                        12);
+                content.newLineAtOffset(72, 720);
+                content.showText("not selected");
+                content.endText();
+            }
+
+            PDPage textPage = new PDPage();
+            document.addPage(textPage);
+            try (PDPageContentStream content = new PDPageContentStream(document, textPage)) {
+                content.beginText();
+                content.setFont(
+                        new PDType1Font(Standard14Fonts.FontName.HELVETICA),
+                        12);
+                content.newLineAtOffset(72, 720);
+                content.showText("selected");
+                content.endText();
+            }
+
+            document.addPage(new PDPage());
+            document.save(pdf.toFile());
+        }
+
+        AuditReport report =
+                new PdfTextLayerAuditor().audit(pdf, PageSelection.parse("2"));
+
+        assertEquals(3, report.pageCount());
+        assertEquals(1, report.pages().size());
+        assertEquals(2, report.pages().getFirst().pageNumber());
+        assertFalse(report.pages().getFirst().needsAttention());
+    }
+
+    @Test
+    void rejectsSelectedPageOutsideDocument() throws IOException {
+        Path pdf = temporaryDirectory.resolve("one-page.pdf");
+        try (PDDocument document = new PDDocument()) {
+            document.addPage(new PDPage());
+            document.save(pdf.toFile());
+        }
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new PdfTextLayerAuditor().audit(pdf, PageSelection.parse("2")));
+
+        assertEquals(
+                "Requested page 2 exceeds document page count of 1",
+                exception.getMessage());
+    }
+
     private static void addTwoFontPage(PDDocument document, PDType3Font type3Font)
             throws IOException {
         PDPage page = new PDPage();

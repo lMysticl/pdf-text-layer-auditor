@@ -39,7 +39,7 @@ public final class Main {
                     options.maxFileSizeBytes(),
                     options.maxPageCount(),
                     options.tinyTextThresholdPoints())
-                    .audit(options.input());
+                    .audit(options.input(), options.pageSelection());
             if (options.outputFormat() == CliOptions.OutputFormat.JSON) {
                 new JsonReportPrinter().print(report, System.out);
             } else {
@@ -71,6 +71,7 @@ public final class Main {
         out.println("  --max-file-size-mib <MiB>  Set the input-size limit (default: 100)");
         out.println("  --max-pages <count>        Set the page-count limit (default: 1000)");
         out.println("  --tiny-text-threshold-pt <pt> Set threshold (default: 3; 0 disables)");
+        out.println("  --pages <selection>        Inspect pages such as 1,3-5");
         out.println("  --version                  Show the installed version");
         out.println("  -h, --help                 Show this help");
         out.println();

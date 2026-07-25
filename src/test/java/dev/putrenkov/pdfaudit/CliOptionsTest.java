@@ -48,6 +48,26 @@ class CliOptionsTest {
     }
 
     @Test
+    void parsesPageSelection() {
+        CliOptions options = CliOptions.parse(new String[] {
+            "--pages", "1,3-4", "document.pdf"
+        });
+
+        assertEquals(
+                java.util.List.of(1, 3, 4),
+                options.pageSelection().resolve(5));
+    }
+
+    @Test
+    void rejectsDuplicatePageSelection() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> CliOptions.parse(new String[] {
+                    "--pages", "1", "--pages", "2", "document.pdf"
+                }));
+    }
+
+    @Test
     void parsesStandaloneActions() {
         assertEquals(
                 CliOptions.Mode.HELP,

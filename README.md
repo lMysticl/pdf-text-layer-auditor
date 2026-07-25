@@ -59,6 +59,14 @@ Check the installed build:
 java -jar target/pdf-text-layer-auditor.jar --version
 ```
 
+Inspect only selected pages:
+
+```bash
+java -jar target/pdf-text-layer-auditor.jar --pages 1,3-5 document.pdf
+```
+
+The report keeps the document page numbers and distinguishes total pages from inspected pages.
+
 Example:
 
 ```text
