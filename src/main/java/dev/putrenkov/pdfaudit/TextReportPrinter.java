@@ -22,13 +22,15 @@ public final class TextReportPrinter {
         out.println();
 
         for (PageAudit page : report.pages()) {
+            int fontCount = page.fonts().size();
             out.printf(
                     Locale.ROOT,
-                    "Page %d: %d glyphs, %d Unicode characters, %d fonts%n",
+                    "Page %d: %d glyphs, %d Unicode characters, %d %s%n",
                     page.pageNumber(),
                     page.glyphCount(),
                     page.unicodeCharacterCount(),
-                    page.fonts().size());
+                    fontCount,
+                    fontCount == 1 ? "font" : "fonts");
 
             for (FontAudit font : page.fonts()) {
                 out.printf(

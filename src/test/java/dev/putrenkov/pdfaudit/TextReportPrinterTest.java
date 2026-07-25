@@ -12,6 +12,44 @@ import org.junit.jupiter.api.Test;
 
 class TextReportPrinterTest {
     @Test
+    void usesSingularFontLabelOnlyForOneFont() {
+        FontAudit firstFont = new FontAudit("First", false, false, 1);
+        FontAudit secondFont = new FontAudit("Second", false, false, 1);
+        List<PageAudit> pages = List.of(
+                new PageAudit(1, 0, 0, 0, 0, 0, List.of(), List.of()),
+                new PageAudit(2, 1, 1, 0, 0, 0, List.of(firstFont), List.of()),
+                new PageAudit(
+                        3,
+                        2,
+                        2,
+                        0,
+                        0,
+                        0,
+                        List.of(firstFont, secondFont),
+                        List.of()));
+        AuditReport report = new AuditReport(
+                Path.of("document.pdf"),
+                100,
+                3,
+                false,
+                true,
+                3.0f,
+                pages);
+
+        ByteArrayOutputStream capturedOutput = new ByteArrayOutputStream();
+        try (PrintStream output =
+                new PrintStream(capturedOutput, true, StandardCharsets.UTF_8)) {
+            new TextReportPrinter().print(report, output);
+        }
+
+        List<String> lines =
+                capturedOutput.toString(StandardCharsets.UTF_8).lines().toList();
+        assertTrue(lines.contains("Page 1: 0 glyphs, 0 Unicode characters, 0 fonts"));
+        assertTrue(lines.contains("Page 2: 1 glyphs, 1 Unicode characters, 1 font"));
+        assertTrue(lines.contains("Page 3: 2 glyphs, 2 Unicode characters, 2 fonts"));
+    }
+
+    @Test
     void escapesTerminalControlsInFontNames() {
         FontAudit font = new FontAudit(
                 "Bad" + (char) 0x1B + "[31mRED" + (char) 0x0A + (char) 0x202E + "txt",
