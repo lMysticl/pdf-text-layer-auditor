@@ -80,6 +80,15 @@ This makes the tool usable in CI without parsing its human-readable output.
 
 The default audit rejects files larger than 100 MiB and documents with more than 1,000 pages. Temporary PDF streams are buffered on disk instead of an unrestricted heap cache.
 
+Controlled environments can override either limit:
+
+```bash
+java -jar target/pdf-text-layer-auditor.jar \
+  --max-file-size-mib 250 \
+  --max-pages 2500 \
+  document.pdf
+```
+
 These limits reduce accidental resource use but do not sandbox the PDF parser. Process untrusted files in an isolated environment with separate CPU, memory, disk, and time limits.
 
 ## Honest limitations

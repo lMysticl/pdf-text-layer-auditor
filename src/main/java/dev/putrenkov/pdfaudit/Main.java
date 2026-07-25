@@ -35,7 +35,10 @@ public final class Main {
         }
 
         try {
-            AuditReport report = new PdfTextLayerAuditor().audit(options.input());
+            AuditReport report = new PdfTextLayerAuditor(
+                    options.maxFileSizeBytes(),
+                    options.maxPageCount())
+                    .audit(options.input());
             if (options.outputFormat() == CliOptions.OutputFormat.JSON) {
                 new JsonReportPrinter().print(report, System.out);
             } else {
@@ -60,12 +63,14 @@ public final class Main {
     }
 
     private static void printUsage(PrintStream out) {
-        out.println("Usage: java -jar pdf-text-layer-auditor.jar [--json] <file.pdf>");
+        out.println("Usage: java -jar pdf-text-layer-auditor.jar [options] <file.pdf>");
         out.println();
         out.println("Options:");
-        out.println("  --json     Print a machine-readable JSON report");
-        out.println("  --version  Show the installed version");
-        out.println("  -h, --help Show this help");
+        out.println("  --json                     Print a machine-readable JSON report");
+        out.println("  --max-file-size-mib <MiB>  Set the input-size limit (default: 100)");
+        out.println("  --max-pages <count>        Set the page-count limit (default: 1000)");
+        out.println("  --version                  Show the installed version");
+        out.println("  -h, --help                 Show this help");
         out.println();
         out.println("Exit codes:");
         out.println("  0  No basic text-layer problems detected");
