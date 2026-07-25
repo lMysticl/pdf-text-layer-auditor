@@ -4,9 +4,18 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Java 21](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
 
-A small Java CLI that reports basic native text-layer signals for each PDF page.
+PDF Text Layer Auditor is a Java CLI for diagnosing missing or suspicious native
+text layers before they disrupt search, copy/paste, indexing, accessibility
+workflows, or downstream text extraction.
 
-It is useful when a PDF looks correct but search, copy/paste, indexing, accessibility tooling, or downstream text extraction behaves unexpectedly.
+A PDF can look correct in a viewer while containing no searchable text, broken
+Unicode mappings, replacement characters, or text that is too small to be
+useful. The auditor inspects these signals page by page and produces either a
+readable terminal report or versioned JSON for automated checks.
+
+Use it to investigate a troublesome PDF, preflight documents before ingestion,
+or fail a CI job when a document needs attention. It does not run OCR, modify
+the source file, or claim accessibility conformance.
 
 ## What it detects
 
