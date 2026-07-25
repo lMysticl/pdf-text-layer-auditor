@@ -41,7 +41,7 @@ class MainTest {
 
         String json = capturedOutput.toString(StandardCharsets.UTF_8).trim();
         assertEquals(1, exitCode);
-        assertTrue(json.startsWith("{\"file\":"));
+        assertTrue(json.startsWith("{\"schemaVersion\":1,\"file\":"));
         assertTrue(json.contains("\"pageCount\":1"));
         assertTrue(json.contains("\"code\":\"NO_TEXT_LAYER\""));
         assertTrue(json.endsWith("]}"));

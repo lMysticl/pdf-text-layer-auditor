@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lMysticl/pdf-text-layer-auditor/main/docs/report-schema-v1.json",
+  "title": "PDF Text Layer Auditor report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "file",
+    "fileSizeBytes",
+    "pageCount",
+    "inspectedPageCount",
+    "encrypted",
+    "extractionAllowed",
+    "tinyTextThresholdPoints",
+    "needsAttention",
+    "pagesNeedingAttention",
+    "pages"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "file": {
+      "type": "string"
+    },
+    "fileSizeBytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pageCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inspectedPageCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "encrypted": {
+      "type": "boolean"
+    },
+    "extractionAllowed": {
+      "type": "boolean"
+    },
+    "tinyTextThresholdPoints": {
+      "type": "number",
+      "minimum": 0
+    },
+    "needsAttention": {
+      "type": "boolean"
+    },
+    "pagesNeedingAttention": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/page"
+      }
+    }
+  },
+  "$defs": {
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pageNumber",
+        "glyphCount",
+        "unicodeCharacterCount",
+        "missingUnicodeGlyphCount",
+        "replacementCharacterCount",
+        "tinyTextGlyphCount",
+        "needsAttention",
+        "fonts",
+        "findings"
+      ],
+      "properties": {
+        "pageNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "glyphCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unicodeCharacterCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missingUnicodeGlyphCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "replacementCharacterCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tinyTextGlyphCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "needsAttention": {
+          "type": "boolean"
+        },
+        "fonts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/font"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        }
+      }
+    },
+    "font": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "embedded",
+        "damaged",
+        "glyphCount"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "embedded": {
+          "type": "boolean"
+        },
+        "damaged": {
+          "type": "boolean"
+        },
+        "glyphCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "description"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "NO_TEXT_LAYER",
+            "MISSING_UNICODE",
+            "REPLACEMENT_CHARACTERS",
+            "TINY_TEXT"
+          ]
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
