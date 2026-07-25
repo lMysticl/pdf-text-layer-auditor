@@ -66,4 +66,32 @@ class MainTest {
                 "pdf-text-layer-auditor development",
                 capturedOutput.toString(StandardCharsets.UTF_8).trim());
     }
+
+    @Test
+    @ResourceLock(Resources.SYSTEM_ERR)
+    void configuredPageLimitReachesAuditor() throws IOException {
+        Path pdf = temporaryDirectory.resolve("two-pages.pdf");
+        try (PDDocument document = new PDDocument()) {
+            document.addPage(new PDPage());
+            document.addPage(new PDPage());
+            document.save(pdf.toFile());
+        }
+
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream capturedError = new ByteArrayOutputStream();
+        int exitCode;
+        try (PrintStream replacement =
+                new PrintStream(capturedError, true, StandardCharsets.UTF_8)) {
+            System.setErr(replacement);
+            exitCode = Main.run(new String[] {
+                "--max-pages", "1", pdf.toString()
+            });
+        } finally {
+            System.setErr(originalErr);
+        }
+
+        assertEquals(2, exitCode);
+        assertTrue(capturedError.toString(StandardCharsets.UTF_8)
+                .contains("configured page limit of 1"));
+    }
 }
