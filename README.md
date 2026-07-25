@@ -114,7 +114,7 @@ These limits reduce accidental resource use but do not sandbox the PDF parser. P
 - The audit does not determine whether text is visible, on-page, or unclipped.
 - PDF text coordinates and Unicode mappings depend on the source file.
 - Annotation appearance text is not included.
-- Password-protected PDFs are not supported in the first release.
+- Password-protected PDFs are not supported.
 - Results are diagnostics, not PDF/UA or accessibility certification.
 
 ## Development
