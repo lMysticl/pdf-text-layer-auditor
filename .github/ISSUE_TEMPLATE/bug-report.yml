@@ -26,8 +26,8 @@ body:
   - type: textarea
     id: command
     attributes:
-      label: Command and exit code
-      description: Include the exact command, exit code, and relevant output.
+      label: Command, exit code, stdout, and stderr
+      description: Include the exact command and exit code, and keep standard output separate from standard error.
       render: shell
     validations:
       required: true

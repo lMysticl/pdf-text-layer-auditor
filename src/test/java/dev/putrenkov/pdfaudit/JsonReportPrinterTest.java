@@ -1,6 +1,8 @@
 package dev.putrenkov.pdfaudit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.networknt.schema.InputFormat;
@@ -78,5 +80,40 @@ class JsonReportPrinterTest {
                         + "\"tinyTextThresholdPoints\":0.0,"
                         + "\"needsAttention\":false,\"pagesNeedingAttention\":0,\"pages\":[]}",
                 JsonReportPrinter.toJson(report));
+    }
+
+    @Test
+    void successfulReportRequiresExtractionPermission() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new AuditReport(
+                        Path.of("document.pdf"),
+                        123,
+                        1,
+                        true,
+                        false,
+                        3.0f,
+                        List.of()));
+
+        assertEquals(
+                "Successful audit reports require text extraction permission",
+                exception.getMessage());
+    }
+
+    @Test
+    void schemaRejectsAReportWithoutExtractionPermission() throws Exception {
+        String schemaDocument = Files.readString(Path.of("docs", "report-schema-v1.json"));
+        SchemaRegistry registry =
+                SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12);
+        String invalidJson =
+                "{\"schemaVersion\":1,\"file\":\"document.pdf\","
+                        + "\"fileSizeBytes\":123,\"pageCount\":1,\"inspectedPageCount\":0,"
+                        + "\"encrypted\":true,\"extractionAllowed\":false,"
+                        + "\"tinyTextThresholdPoints\":3.0,\"needsAttention\":false,"
+                        + "\"pagesNeedingAttention\":0,\"pages\":[]}";
+
+        var errors = registry.getSchema(schemaDocument).validate(invalidJson, InputFormat.JSON);
+
+        assertFalse(errors.isEmpty());
     }
 }

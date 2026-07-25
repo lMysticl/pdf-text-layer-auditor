@@ -52,7 +52,7 @@ Emit a machine-readable report:
 java -jar target/pdf-text-layer-auditor.jar --json document.pdf
 ```
 
-JSON output includes the report summary, per-page metrics, font state, and findings. Every document declares `schemaVersion`; the strict [version 1 JSON Schema](docs/report-schema-v1.json) is published with the repository. The default output remains human-readable.
+JSON output includes the report summary, per-page metrics, font state, and findings. Every document declares `schemaVersion`; the strict [version 1 JSON Schema](docs/report-schema-v1.json) is published with the repository. Successful reports always set `extractionAllowed` to `true`; a PDF that forbids extraction produces exit code `2` and no report. The default output remains human-readable.
 
 The tiny-text threshold defaults to 3 pt. Adjust it for a specific workflow, or use `0` to disable that finding:
 
@@ -97,13 +97,26 @@ Page 2: 0 glyphs, 0 Unicode characters, 0 fonts
 Result: 1 of 2 pages need attention
 ```
 
+## Output streams
+
+Reports, help, and version information are written to standard output. Invalid arguments, audit failures, and output failures are written to standard error. In JSON mode, standard output contains only the JSON document.
+
+Keep the streams separate when saving a report:
+
+```bash
+java -jar target/pdf-text-layer-auditor.jar --json document.pdf \
+  > report.json 2> audit-error.log
+```
+
+Exit code `1` still means that a valid report was written; one or more inspected pages need attention.
+
 ## Exit codes
 
 | Code | Meaning |
 |---:|---|
 | `0` | No basic text-layer problems detected |
 | `1` | One or more pages need attention |
-| `2` | Invalid arguments or the PDF could not be audited |
+| `2` | Invalid arguments, audit failure, or output failure |
 
 This makes the tool usable in CI without parsing its human-readable output.
 

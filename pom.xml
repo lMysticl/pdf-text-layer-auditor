@@ -47,6 +47,7 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <!-- Silences JSON Schema validator diagnostics in tests; not packaged at runtime. -->
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-nop</artifactId>
             <version>${slf4j.version}</version>

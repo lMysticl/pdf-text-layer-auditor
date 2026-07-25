@@ -37,7 +37,7 @@ Tests should create compact PDFs at runtime with PDFBox. Add a binary fixture on
 - Keep one behavioral change per pull request.
 - Start from an issue that states the observable problem and acceptance criteria.
 - Add a test that fails without the change.
-- Update text output, JSON output, and the published schema when their contract changes.
+- Update text output, JSON output, stdout/stderr routing, and the published schema when their contract changes.
 - Preserve the documented exit codes.
 - Do not weaken file, page, memory, or permission safeguards without explaining the operational impact.
 - Do not add generated reports, local PDFs, IDE files, or debug output.
