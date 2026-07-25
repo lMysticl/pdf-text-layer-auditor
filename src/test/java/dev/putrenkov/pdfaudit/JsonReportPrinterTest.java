@@ -1,14 +1,19 @@
 package dev.putrenkov.pdfaudit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.networknt.schema.InputFormat;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SpecificationVersion;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class JsonReportPrinterTest {
     @Test
-    void serializesCompleteReportAndEscapesStrings() {
+    void serializesCompleteReportAndEscapesStrings() throws Exception {
         PageAudit page = new PageAudit(
                 1,
                 4,
@@ -26,6 +31,7 @@ class JsonReportPrinterTest {
                 true,
                 3.0f,
                 List.of(page));
+        String json = JsonReportPrinter.toJson(report);
 
         assertEquals(
                 "{\"schemaVersion\":1,\"file\":\"document.pdf\","
@@ -42,7 +48,15 @@ class JsonReportPrinterTest {
                         + "\"embedded\":true,\"damaged\":false,\"glyphCount\":4}],"
                         + "\"findings\":[{\"code\":\"MISSING_UNICODE\","
                         + "\"description\":\"Some glyphs have no usable Unicode mapping.\"}]}]}",
-                JsonReportPrinter.toJson(report));
+                json);
+
+        String schemaDocument = Files.readString(Path.of("docs", "report-schema-v1.json"));
+        SchemaRegistry registry =
+                SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12);
+
+        var errors = registry.getSchema(schemaDocument).validate(json, InputFormat.JSON);
+
+        assertTrue(errors.isEmpty(), errors::toString);
     }
 
     @Test
