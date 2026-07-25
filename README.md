@@ -80,10 +80,16 @@ Example:
 
 ```text
 PDF Text Layer Audit
-File: document.pdf
-Pages: 2
+File: /path/to/document.pdf
+Size: 0.02 MiB
+Pages in document: 2
+Pages inspected: 2
+Encrypted: false
+Tiny text threshold: 3.00 pt
 
 Page 1: 154 glyphs, 154 Unicode characters, 2 fonts
+  Font: Helvetica | embedded=false | damaged=false | glyphs=120
+  Font: Times-Roman | embedded=false | damaged=false | glyphs=34
   OK: no basic text-layer problems detected
 Page 2: 0 glyphs, 0 Unicode characters, 0 fonts
   WARN NO_TEXT_LAYER: No native text glyphs were found; the page may be blank or image-only.

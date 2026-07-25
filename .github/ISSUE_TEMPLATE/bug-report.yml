@@ -13,7 +13,7 @@ body:
     attributes:
       label: Auditor version
       description: Output of `java -jar pdf-text-layer-auditor.jar --version`
-      placeholder: pdf-text-layer-auditor 0.2.0
+      placeholder: pdf-text-layer-auditor 0.3.0
     validations:
       required: true
   - type: input
