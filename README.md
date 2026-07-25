@@ -18,6 +18,8 @@ It is useful when a PDF looks correct but search, copy/paste, indexing, accessib
 
 ## Quick start
 
+Download the prebuilt executable JAR from the [latest release](https://github.com/lMysticl/pdf-text-layer-auditor/releases/latest), or build it locally.
+
 Requirements:
 
 - Java 21 or newer
