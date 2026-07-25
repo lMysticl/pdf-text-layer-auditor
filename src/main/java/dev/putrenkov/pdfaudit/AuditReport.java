@@ -17,10 +17,6 @@ public record AuditReport(
             throw new IllegalArgumentException(
                     "tinyTextThresholdPoints must be finite and non-negative");
         }
-        if (!extractionAllowed) {
-            throw new IllegalArgumentException(
-                    "Successful audit reports require text extraction permission");
-        }
         pages = List.copyOf(pages);
     }
 

@@ -40,8 +40,7 @@
       "type": "boolean"
     },
     "extractionAllowed": {
-      "const": true,
-      "description": "Successful reports are emitted only when PDF permissions allow text extraction."
+      "type": "boolean"
     },
     "tinyTextThresholdPoints": {
       "type": "number",

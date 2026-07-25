@@ -41,6 +41,18 @@ class MainTest {
     }
 
     @Test
+    void textReportPrintsToStdoutOnly() throws IOException {
+        Path pdf = createBlankPdf("blank-text-report.pdf");
+
+        CliResult result = invoke(pdf.toString());
+
+        assertEquals(1, result.exitCode());
+        assertTrue(result.stdout().contains("PDF Text Layer Audit"));
+        assertTrue(result.stdout().contains("Result: 1 of 1 pages need attention"));
+        assertTrue(result.stderr().isEmpty());
+    }
+
+    @Test
     void versionOptionPrintsDevelopmentIdentityToStdoutOnly() {
         CliResult result = invoke("--version");
 
@@ -122,7 +134,8 @@ class MainTest {
     }
 
     @Test
-    void outputFailureReturnsExitCodeTwoAndUsesStderr() {
+    void textReportOutputFailureReturnsExitCodeTwoAndUsesStderr() throws IOException {
+        Path pdf = createBlankPdf("failed-text-output.pdf");
         ByteArrayOutputStream capturedError = new ByteArrayOutputStream();
         int exitCode;
         try (PrintStream failingOutput = new PrintStream(
@@ -136,7 +149,7 @@ class MainTest {
                         StandardCharsets.UTF_8);
                 PrintStream error =
                         new PrintStream(capturedError, true, StandardCharsets.UTF_8)) {
-            exitCode = Main.run(new String[] {"--version"}, failingOutput, error);
+            exitCode = Main.run(new String[] {pdf.toString()}, failingOutput, error);
         }
 
         assertEquals(2, exitCode);
@@ -158,6 +171,15 @@ class MainTest {
                     capturedOutput.toString(StandardCharsets.UTF_8),
                     capturedError.toString(StandardCharsets.UTF_8));
         }
+    }
+
+    private Path createBlankPdf(String fileName) throws IOException {
+        Path pdf = temporaryDirectory.resolve(fileName);
+        try (PDDocument document = new PDDocument()) {
+            document.addPage(new PDPage());
+            document.save(pdf.toFile());
+        }
+        return pdf;
     }
 
     private Path createEncryptedPdf(

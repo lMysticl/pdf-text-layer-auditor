@@ -4,7 +4,7 @@
 
 - Documented and tested the stdout/stderr contract for human-readable and JSON output.
 - Return exit code 2 when command output cannot be written.
-- Constrained successful JSON reports to PDFs that allow text extraction.
+- Documented that the CLI emits reports only when PDF permissions allow text extraction.
 
 ## 0.3.1 — 2026-07-25
 
