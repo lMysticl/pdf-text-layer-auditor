@@ -6,7 +6,7 @@
 
     <groupId>dev.putrenkov</groupId>
     <artifactId>pdf-text-layer-auditor</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <name>PDF Text Layer Auditor</name>
     <description>Report basic native text-layer signals for PDF pages.</description>
     <url>https://github.com/lMysticl/pdf-text-layer-auditor</url>
@@ -92,6 +92,15 @@
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <finalName>pdf-text-layer-auditor</finalName>
                             <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"/>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer"/>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                                    <resource>META-INF/DEPENDENCIES</resource>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                                    <resource>META-INF/LICENSE</resource>
+                                    <file>LICENSE</file>
+                                </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>dev.putrenkov.pdfaudit.Main</mainClass>
                                     <manifestEntries>

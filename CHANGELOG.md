@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — 2026-07-25
+
+- Added strict CLI parsing and an installed-version command.
+- Made file-size, page-count, and tiny-text limits configurable.
+- Added non-contiguous page selection while preserving document page numbers.
+- Published a strict version 1 schema for JSON reports.
+- Added contribution, security, issue, and pull request guidance.
+- Added Dependabot updates, CodeQL analysis, verified release automation, checksums, and a CycloneDX 1.6 SBOM.
+- Preserved Apache license and notice metadata in the executable JAR.
+
 ## 0.2.0 — 2026-07-25
 
 - Added machine-readable JSON output with `--json`.
