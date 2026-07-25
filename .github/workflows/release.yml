@@ -52,6 +52,7 @@ jobs:
           gh release create "${GITHUB_REF_NAME}"
           target/pdf-text-layer-auditor.jar
           target/pdf-text-layer-auditor.jar.sha256
+          target/bom.json
           --verify-tag
           --generate-notes
           --title "PDF Text Layer Auditor ${{ steps.version.outputs.value }}"
