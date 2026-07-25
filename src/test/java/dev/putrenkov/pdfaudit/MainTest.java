@@ -1,6 +1,7 @@
 package dev.putrenkov.pdfaudit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -93,5 +94,25 @@ class MainTest {
         assertEquals(2, exitCode);
         assertTrue(capturedError.toString(StandardCharsets.UTF_8)
                 .contains("configured page limit of 1"));
+    }
+
+    @Test
+    @ResourceLock(Resources.SYSTEM_ERR)
+    void escapesTerminalControlsInErrorMessages() {
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream capturedError = new ByteArrayOutputStream();
+        int exitCode;
+        try (PrintStream replacement =
+                new PrintStream(capturedError, true, StandardCharsets.UTF_8)) {
+            System.setErr(replacement);
+            exitCode = Main.run(new String[] {"missing" + (char) 0x1B + "[31m.pdf"});
+        } finally {
+            System.setErr(originalErr);
+        }
+
+        String error = capturedError.toString(StandardCharsets.UTF_8);
+        assertEquals(2, exitCode);
+        assertTrue(error.contains("missing\\u001B[31m.pdf"));
+        assertFalse(error.contains(String.valueOf((char) 0x1B)));
     }
 }

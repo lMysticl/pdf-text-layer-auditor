@@ -6,7 +6,7 @@ import java.util.Locale;
 public final class TextReportPrinter {
     public void print(AuditReport report, PrintStream out) {
         out.println("PDF Text Layer Audit");
-        out.println("File: " + report.file());
+        out.println("File: " + TerminalText.escape(String.valueOf(report.file())));
         out.printf(Locale.ROOT, "Size: %.2f MiB%n", report.fileSizeBytes() / 1024.0 / 1024.0);
         out.println("Pages in document: " + report.pageCount());
         out.println("Pages inspected: " + report.pages().size());
@@ -34,7 +34,7 @@ public final class TextReportPrinter {
                 out.printf(
                         Locale.ROOT,
                         "  Font: %s | embedded=%s | damaged=%s | glyphs=%d%n",
-                        font.name(),
+                        TerminalText.escape(font.name()),
                         font.embedded(),
                         font.damaged(),
                         font.glyphCount());
