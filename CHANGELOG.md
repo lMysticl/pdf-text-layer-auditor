@@ -5,6 +5,7 @@
 - Documented and tested the stdout/stderr contract for human-readable and JSON output.
 - Return exit code 2 when command output cannot be written.
 - Documented that the CLI emits reports only when PDF permissions allow text extraction.
+- Use the singular `font` label when a page contains exactly one font.
 
 ## 0.3.1 — 2026-07-25
 
