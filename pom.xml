@@ -8,7 +8,7 @@
     <artifactId>pdf-text-layer-auditor</artifactId>
     <version>0.3.0</version>
     <name>PDF Text Layer Auditor</name>
-    <description>Report basic native text-layer signals for PDF pages.</description>
+    <description>Diagnose missing or suspicious PDF text layers for search, indexing, accessibility, and extraction workflows.</description>
     <url>https://github.com/lMysticl/pdf-text-layer-auditor</url>
 
     <licenses>
