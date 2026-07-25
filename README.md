@@ -45,6 +45,12 @@ java -jar target/pdf-text-layer-auditor.jar --json document.pdf
 
 JSON output includes the report summary, per-page metrics, font state, and findings. The default output remains human-readable.
 
+Check the installed build:
+
+```bash
+java -jar target/pdf-text-layer-auditor.jar --version
+```
+
 Example:
 
 ```text
