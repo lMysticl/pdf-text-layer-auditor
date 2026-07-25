@@ -48,7 +48,7 @@ class MainTest {
 
         assertEquals(1, result.exitCode());
         assertTrue(result.stdout().contains("PDF Text Layer Audit"));
-        assertTrue(result.stdout().contains("Result: 1 of 1 pages need attention"));
+        assertTrue(result.stdout().contains("Result: 1 of 1 page needs attention"));
         assertTrue(result.stderr().isEmpty());
     }
 

@@ -50,6 +50,35 @@ class TextReportPrinterTest {
     }
 
     @Test
+    void usesSingularSummaryOnlyForOneInspectedPage() {
+        PageAudit attentionPage = new PageAudit(
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                List.of(),
+                List.of(Finding.NO_TEXT_LAYER));
+        PageAudit healthyPage = new PageAudit(
+                2,
+                1,
+                1,
+                0,
+                0,
+                0,
+                List.of(),
+                List.of());
+
+        assertTrue(printSummary(List.of(attentionPage))
+                .contains("Result: 1 of 1 page needs attention"));
+        assertTrue(printSummary(List.of(attentionPage, healthyPage))
+                .contains("Result: 1 of 2 pages need attention"));
+        assertTrue(printSummary(List.of(attentionPage, attentionPage))
+                .contains("Result: 2 of 2 pages need attention"));
+    }
+
+    @Test
     void escapesTerminalControlsInFontNames() {
         FontAudit font = new FontAudit(
                 "Bad" + (char) 0x1B + "[31mRED" + (char) 0x0A + (char) 0x202E + "txt",
@@ -84,5 +113,22 @@ class TextReportPrinterTest {
         assertTrue(text.contains("Font: Bad\\u001B[31mRED\\u000A\\u202Etxt"));
         assertFalse(text.contains(String.valueOf((char) 0x1B)));
         assertFalse(text.contains(String.valueOf((char) 0x202E)));
+    }
+
+    private String printSummary(List<PageAudit> pages) {
+        AuditReport report = new AuditReport(
+                Path.of("document.pdf"),
+                100,
+                pages.size(),
+                false,
+                true,
+                3.0f,
+                pages);
+        ByteArrayOutputStream capturedOutput = new ByteArrayOutputStream();
+        try (PrintStream output =
+                new PrintStream(capturedOutput, true, StandardCharsets.UTF_8)) {
+            new TextReportPrinter().print(report, output);
+        }
+        return capturedOutput.toString(StandardCharsets.UTF_8);
     }
 }

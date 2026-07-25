@@ -53,11 +53,14 @@ public final class TextReportPrinter {
 
         out.println();
         if (report.needsAttention()) {
+            int inspectedPageCount = report.pages().size();
             out.printf(
                     Locale.ROOT,
-                    "Result: %d of %d pages need attention%n",
+                    "Result: %d of %d %s %s attention%n",
                     report.pagesNeedingAttention(),
-                    report.pages().size());
+                    inspectedPageCount,
+                    inspectedPageCount == 1 ? "page" : "pages",
+                    inspectedPageCount == 1 ? "needs" : "need");
         } else {
             out.println("Result: no inspected text-layer problems were found");
         }
