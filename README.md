@@ -140,7 +140,11 @@ mvn verify
 
 The tests create small synthetic PDFs at runtime, so the repository does not need large binary fixtures.
 
-`mvn verify` also creates a CycloneDX 1.6 software bill of materials at `target/bom.json`. Tagged releases publish the SBOM beside the executable JAR and checksum.
+`mvn verify` also creates a CycloneDX 1.6 software bill of materials at `target/bom.json`. Tagged releases publish the SBOM beside the executable JAR and checksum. Release artifacts include signed build-provenance attestations that can be verified with:
+
+```bash
+gh attestation verify pdf-text-layer-auditor.jar --repo lMysticl/pdf-text-layer-auditor
+```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a fixture, issue, or pull request. Report suspected vulnerabilities through the private process in [SECURITY.md](SECURITY.md).
 

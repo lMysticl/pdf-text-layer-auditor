@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1 — 2026-07-25
+
+- Escaped terminal control characters in file paths, font names, and error messages.
+- Pinned GitHub Actions to immutable revisions, restricted release tags to `main`, and added signed build provenance.
+- Added automated validation of JSON reports against the published schema.
+- Added regression coverage for encrypted, password-protected, and extraction-restricted PDFs.
+- Updated JUnit and the Maven compiler, test, and packaging plugins.
+
 ## 0.3.0 — 2026-07-25
 
 - Added strict CLI parsing and an installed-version command.
