@@ -1,6 +1,7 @@
 package dev.putrenkov.pdfaudit.github;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,11 @@ class ActionReportWriterTest {
         assertEquals(
                 "NO_TEXT_LAYER",
                 report.at("/files/0/report/pages/0/findings/0/code").textValue());
+        if (Files.getFileStore(output).supportsFileAttributeView("posix")) {
+            var permissions = Files.getPosixFilePermissions(output);
+            assertTrue(permissions.contains(PosixFilePermission.GROUP_READ));
+            assertTrue(permissions.contains(PosixFilePermission.OTHERS_READ));
+        }
 
         String actionSchema = Files.readString(
                 Path.of("docs", "action-report-schema-v1.json"));

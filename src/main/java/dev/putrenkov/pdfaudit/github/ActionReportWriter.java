@@ -10,7 +10,10 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.EnumSet;
 import java.util.Objects;
+import java.util.Set;
 
 final class ActionReportWriter {
     static final int SCHEMA_VERSION = 1;
@@ -66,6 +69,7 @@ final class ActionReportWriter {
         try {
             Files.write(temporary, content);
             moveReplacing(temporary, reportPath);
+            makeReadableByRunner(reportPath);
         } finally {
             Files.deleteIfExists(temporary);
         }
@@ -88,6 +92,18 @@ final class ActionReportWriter {
                     StandardCopyOption.REPLACE_EXISTING);
         } catch (AtomicMoveNotSupportedException exception) {
             Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static void makeReadableByRunner(Path reportPath) throws IOException {
+        try {
+            Set<PosixFilePermission> permissions = EnumSet.copyOf(
+                    Files.getPosixFilePermissions(reportPath));
+            permissions.add(PosixFilePermission.GROUP_READ);
+            permissions.add(PosixFilePermission.OTHERS_READ);
+            Files.setPosixFilePermissions(reportPath, permissions);
+        } catch (UnsupportedOperationException ignored) {
+            // Windows and other non-POSIX file systems use their native defaults.
         }
     }
 }
