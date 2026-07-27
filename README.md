@@ -86,6 +86,8 @@ Inputs:
 | `token` | required | Token used only to list pull-request files |
 | `fail_on_findings` | `true` | Fail when at least one page needs attention |
 | `max_annotations` | `20` | Maximum annotations emitted by the step |
+| `max_files` | `50` | Maximum changed PDFs audited in one pull request |
+| `max_total_size_mib` | `500` | Maximum combined size of changed PDFs |
 | `max_file_size_mib` | `100` | Per-file input-size limit |
 | `max_pages` | `1000` | Per-file page-count limit |
 | `tiny_text_threshold_pt` | `3` | Tiny-text threshold; `0` disables it |
@@ -100,9 +102,11 @@ Outputs:
 | `files_failed` | PDFs that could not be audited |
 | `report_path` | Workspace-relative path to the combined JSON report |
 
-Deleted PDFs and non-PDF files are ignored. GitHub exposes at most 3,000 files
-through the pull-request files endpoint, so the action rejects larger pull
-requests instead of silently auditing an incomplete list.
+Deleted PDFs and non-PDF files are ignored. Before parsing begins, the action
+rejects a workload above `max_files` or `max_total_size_mib`; both limits can be
+raised explicitly for a controlled repository. GitHub exposes at most 3,000
+files through the pull-request files endpoint, so the action also rejects
+larger pull requests instead of silently auditing an incomplete list.
 
 The combined report follows the versioned
 [GitHub Action report schema](docs/action-report-schema-v1.json). Each
@@ -206,7 +210,10 @@ This makes the tool usable in CI without parsing its human-readable output.
 
 ## Input limits
 
-The default audit rejects files larger than 100 MiB and documents with more than 1,000 pages. Temporary PDF streams are buffered on disk instead of an unrestricted heap cache.
+The default audit rejects files larger than 100 MiB and documents with more than
+1,000 pages. The GitHub Action additionally limits one pull request to 50 PDFs
+and 500 MiB of PDF input in total. Temporary PDF streams are buffered on disk
+instead of an unrestricted heap cache.
 
 Controlled environments can override either limit:
 

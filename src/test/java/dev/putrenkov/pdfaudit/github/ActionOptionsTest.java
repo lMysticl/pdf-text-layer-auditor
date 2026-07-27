@@ -21,6 +21,8 @@ class ActionOptionsTest {
 
         assertTrue(options.failOnFindings());
         assertEquals(20, options.maxAnnotations());
+        assertEquals(50, options.maxPdfFiles());
+        assertEquals(500L * 1024 * 1024, options.maxTotalPdfBytes());
         assertEquals(100L * 1024 * 1024, options.maxFileSizeBytes());
         assertEquals(1_000, options.maxPageCount());
         assertEquals(3.0f, options.tinyTextThresholdPoints());
@@ -34,12 +36,16 @@ class ActionOptionsTest {
         Map<String, String> environment = environment();
         environment.put("INPUT_FAIL_ON_FINDINGS", "false");
         environment.put("INPUT_MAX_ANNOTATIONS", "0");
+        environment.put("INPUT_MAX_FILES", "12");
+        environment.put("INPUT_MAX_TOTAL_SIZE_MIB", "750");
         environment.put("INPUT_TINY_TEXT_THRESHOLD_PT", "0");
 
         ActionOptions options = ActionOptions.fromEnvironment(environment);
 
         assertFalse(options.failOnFindings());
         assertEquals(0, options.maxAnnotations());
+        assertEquals(12, options.maxPdfFiles());
+        assertEquals(750L * 1024 * 1024, options.maxTotalPdfBytes());
         assertEquals(0.0f, options.tinyTextThresholdPoints());
     }
 
@@ -65,6 +71,18 @@ class ActionOptionsTest {
                 () -> ActionOptions.fromEnvironment(environment));
 
         assertEquals("fail_on_findings must be true or false", exception.getMessage());
+    }
+
+    @Test
+    void rejectsInvalidWorkloadLimits() {
+        Map<String, String> environment = environment();
+        environment.put("INPUT_MAX_FILES", "0");
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> ActionOptions.fromEnvironment(environment));
+
+        assertTrue(exception.getMessage().contains("max_files"));
     }
 
     @Test

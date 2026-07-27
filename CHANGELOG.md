@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bounded GitHub Action workloads by both changed-PDF count and combined input
+  size before parsing begins.
+- Added configurable `max_files` and `max_total_size_mib` Action inputs.
+
 ## 0.4.1 — 2026-07-28
 
 - Updated Jackson Databind to 2.22.1 and refreshed test-only schema/logging dependencies.
