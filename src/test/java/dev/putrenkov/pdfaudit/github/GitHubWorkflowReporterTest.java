@@ -49,6 +49,7 @@ class GitHubWorkflowReporterTest {
         assertTrue(outputText.contains("files_checked=1"));
         assertTrue(outputText.contains("files_with_findings=1"));
         assertTrue(outputText.contains("files_failed=0"));
+        assertTrue(outputText.contains("report_path=pdf-text-layer-audit.json"));
     }
 
     @Test

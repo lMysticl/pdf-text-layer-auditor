@@ -94,7 +94,7 @@ Outputs:
 | `files_checked` | PDFs audited successfully |
 | `files_with_findings` | Audited PDFs containing findings |
 | `files_failed` | PDFs that could not be audited |
-| `report_path` | Absolute path to the combined JSON report |
+| `report_path` | Workspace-relative path to the combined JSON report |
 
 Deleted PDFs and non-PDF files are ignored. GitHub exposes at most 3,000 files
 through the pull-request files endpoint, so the action rejects larger pull

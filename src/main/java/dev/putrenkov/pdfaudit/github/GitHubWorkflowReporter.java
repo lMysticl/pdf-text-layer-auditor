@@ -26,7 +26,7 @@ final class GitHubWorkflowReporter {
     void publish(ActionRun run, ActionOptions options) throws IOException {
         emitAnnotations(run, options.maxAnnotations());
         appendStepSummary(run);
-        writeOutputs(run, options.reportPath());
+        writeOutputs(run, environmentRelativeReportPath());
         log.printf(
                 "Audited %d changed PDF file(s): %d with findings, %d failed.%n",
                 run.filesChecked(),
@@ -133,7 +133,7 @@ final class GitHubWorkflowReporter {
                 : configured;
     }
 
-    private void writeOutputs(ActionRun run, Path reportPath) throws IOException {
+    private void writeOutputs(ActionRun run, String reportPath) throws IOException {
         String value = environment.get("GITHUB_OUTPUT");
         if (value == null || value.isBlank()) {
             return;

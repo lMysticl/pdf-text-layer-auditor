@@ -43,7 +43,7 @@ outputs:
   files_failed:
     description: Number of PDF files that could not be audited
   report_path:
-    description: Absolute path to the combined JSON report
+    description: Workspace-relative path to the combined JSON report
 
 runs:
   using: docker
