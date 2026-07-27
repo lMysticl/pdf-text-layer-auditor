@@ -1,0 +1,58 @@
+name: PDF Text Layer Audit
+description: Check changed PDF files for missing or suspicious native text layers
+author: Pavel Putrenkov
+
+branding:
+  icon: file-text
+  color: purple
+
+inputs:
+  token:
+    description: GitHub token used to read the pull request file list
+    required: true
+  fail_on_findings:
+    description: Fail the step when one or more PDF pages need attention
+    required: false
+    default: "true"
+  max_annotations:
+    description: Maximum number of file annotations emitted by the action
+    required: false
+    default: "20"
+  max_file_size_mib:
+    description: Maximum size of each PDF in mebibytes
+    required: false
+    default: "100"
+  max_pages:
+    description: Maximum number of pages in each PDF
+    required: false
+    default: "1000"
+  tiny_text_threshold_pt:
+    description: Text below this point size is reported; use 0 to disable
+    required: false
+    default: "3"
+  report_path:
+    description: Workspace-relative path for the combined JSON report
+    required: false
+    default: pdf-text-layer-audit.json
+
+outputs:
+  files_checked:
+    description: Number of changed PDF files that were audited
+  files_with_findings:
+    description: Number of audited PDF files containing findings
+  files_failed:
+    description: Number of PDF files that could not be audited
+  report_path:
+    description: Workspace-relative path to the combined JSON report
+
+runs:
+  using: docker
+  image: Dockerfile
+  args:
+    - ${{ inputs.token }}
+    - ${{ inputs.fail_on_findings }}
+    - ${{ inputs.max_annotations }}
+    - ${{ inputs.max_file_size_mib }}
+    - ${{ inputs.max_pages }}
+    - ${{ inputs.tiny_text_threshold_pt }}
+    - ${{ inputs.report_path }}

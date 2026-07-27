@@ -6,7 +6,7 @@
 
     <groupId>dev.putrenkov</groupId>
     <artifactId>pdf-text-layer-auditor</artifactId>
-    <version>0.3.1</version>
+    <version>0.4.0</version>
     <name>PDF Text Layer Auditor</name>
     <description>Diagnose missing or suspicious PDF text layers for search, indexing, accessibility, and extraction workflows.</description>
     <url>https://github.com/lMysticl/pdf-text-layer-auditor</url>
@@ -24,11 +24,17 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <pdfbox.version>3.0.8</pdfbox.version>
         <junit.version>6.1.2</junit.version>
+        <jackson.version>2.22.0</jackson.version>
         <json-schema-validator.version>3.0.3</json-schema-validator.version>
         <slf4j.version>2.0.17</slf4j.version>
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
@@ -106,6 +112,15 @@
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <finalName>pdf-text-layer-auditor</finalName>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>module-info.class</exclude>
+                                        <exclude>META-INF/versions/*/module-info.class</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"/>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer"/>

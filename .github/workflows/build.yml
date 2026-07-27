@@ -22,3 +22,28 @@ jobs:
           cache: maven
       - name: Build and test
         run: mvn --batch-mode --no-transfer-progress verify
+
+  action-smoke:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run the action against this pull request
+        id: pdf-audit
+        uses: ./
+        with:
+          token: ${{ github.token }}
+          fail_on_findings: "false"
+
+      - name: Upload the action report
+        if: always() && steps.pdf-audit.outputs.report_path != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pdf-text-layer-audit
+          path: ${{ steps.pdf-audit.outputs.report_path }}
+          if-no-files-found: error

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added a Docker-based GitHub Action for auditing PDFs changed by pull requests.
+- Read pull-request file lists through the GitHub REST API with explicit
+  pagination and completeness checks.
+- Added workflow annotations, job summaries, bounded annotation counts,
+  versioned combined JSON reports, and reusable action outputs.
+- Restricted the action to `pull_request` and documented read-only token
+  permissions for untrusted PDF input.
+- Added action contract tests and an end-to-end pull-request smoke job.
 - Documented and tested the stdout/stderr contract for human-readable and JSON output.
 - Return exit code 2 when command output cannot be written.
 - Documented that the CLI emits reports only when PDF permissions allow text extraction.

@@ -12,7 +12,7 @@ public final class JsonReportPrinter {
         out.println(toJson(report));
     }
 
-    static String toJson(AuditReport report) {
+    public static String toJson(AuditReport report) {
         StringBuilder json = new StringBuilder(512);
         json.append('{');
         appendNumberProperty(json, "schemaVersion", SCHEMA_VERSION);

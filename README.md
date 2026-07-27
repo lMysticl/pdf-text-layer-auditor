@@ -25,6 +25,86 @@ the source file, or claim accessibility conformance.
 - suspiciously tiny text below a configurable threshold (3 pt by default)
 - fonts used on each page, including embedded and damaged status
 
+## GitHub Action
+
+The repository also provides a Docker-based GitHub Action that audits every
+added, modified, or renamed PDF in a pull request. It reads the changed-file
+list through the GitHub REST API, adds file annotations to the workflow check,
+writes a job summary, and creates one combined JSON report.
+
+```yaml
+name: PDF text layer
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - name: Audit changed PDFs
+        id: pdf-audit
+        uses: lMysticl/pdf-text-layer-auditor@v0.4.0
+        with:
+          token: ${{ github.token }}
+
+      - name: Upload the JSON report
+        if: always() && steps.pdf-audit.outputs.report_path != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: pdf-text-layer-audit
+          path: ${{ steps.pdf-audit.outputs.report_path }}
+```
+
+The action intentionally supports `pull_request` only. It rejects
+`pull_request_target`, where checking out and parsing untrusted pull-request
+content can expose a more privileged token. The documented workflow grants
+read-only access; annotations are emitted through GitHub workflow commands and
+do not require `checks: write`.
+
+Docker actions run on Linux runners. When a repository stores PDFs in Git LFS,
+configure the checkout step with `lfs: true`; otherwise the action receives the
+small LFS pointer file instead of the PDF.
+
+Inputs:
+
+| Input | Default | Meaning |
+|---|---:|---|
+| `token` | required | Token used only to list pull-request files |
+| `fail_on_findings` | `true` | Fail when at least one page needs attention |
+| `max_annotations` | `20` | Maximum annotations emitted by the step |
+| `max_file_size_mib` | `100` | Per-file input-size limit |
+| `max_pages` | `1000` | Per-file page-count limit |
+| `tiny_text_threshold_pt` | `3` | Tiny-text threshold; `0` disables it |
+| `report_path` | `pdf-text-layer-audit.json` | Workspace-relative JSON report path |
+
+Outputs:
+
+| Output | Meaning |
+|---|---|
+| `files_checked` | PDFs audited successfully |
+| `files_with_findings` | Audited PDFs containing findings |
+| `files_failed` | PDFs that could not be audited |
+| `report_path` | Workspace-relative path to the combined JSON report |
+
+Deleted PDFs and non-PDF files are ignored. GitHub exposes at most 3,000 files
+through the pull-request files endpoint, so the action rejects larger pull
+requests instead of silently auditing an incomplete list.
+
+The combined report follows the versioned
+[GitHub Action report schema](docs/action-report-schema-v1.json). Each
+successful file entry embeds the existing
+[auditor report schema](docs/report-schema-v1.json).
+
 ## Quick start
 
 Download the prebuilt executable JAR from the [latest release](https://github.com/lMysticl/pdf-text-layer-auditor/releases/latest), or build it locally.
@@ -149,6 +229,12 @@ These limits reduce accidental resource use but do not sandbox the PDF parser. P
 
 ```bash
 mvn verify
+```
+
+Build the same container used by the GitHub Action:
+
+```bash
+docker build -t pdf-text-layer-audit-action .
 ```
 
 The tests create small synthetic PDFs at runtime, so the repository does not need large binary fixtures.
