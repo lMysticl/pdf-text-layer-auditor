@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0 — 2026-07-28
+
 - Bounded GitHub Action workloads by both changed-PDF count and combined input
   size before parsing begins.
 - Added configurable `max_files` and `max_total_size_mib` Action inputs.
