@@ -3,6 +3,7 @@
 [![Build](https://github.com/lMysticl/pdf-text-layer-auditor/actions/workflows/build.yml/badge.svg)](https://github.com/lMysticl/pdf-text-layer-auditor/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Java 21](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-PDF_Text_Layer_Audit-blue?logo=github)](https://github.com/marketplace/actions/pdf-text-layer-audit)
 
 PDF Text Layer Auditor is a Java CLI for diagnosing missing or suspicious native
 text layers before they disrupt search, copy/paste, indexing, accessibility
@@ -32,6 +33,9 @@ added, modified, or renamed PDF in a pull request. It reads the changed-file
 list through the GitHub REST API, adds file annotations to the workflow check,
 writes a job summary, and creates one combined JSON report.
 
+Install it from the
+[GitHub Marketplace](https://github.com/marketplace/actions/pdf-text-layer-audit).
+
 ```yaml
 name: PDF text layer
 
@@ -53,7 +57,7 @@ jobs:
 
       - name: Audit changed PDFs
         id: pdf-audit
-        uses: lMysticl/pdf-text-layer-auditor@v0.4.0
+        uses: lMysticl/pdf-text-layer-auditor@v0.4.1
         with:
           token: ${{ github.token }}
 

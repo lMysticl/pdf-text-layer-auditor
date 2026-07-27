@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.4.1 — 2026-07-28
+
+- Updated Jackson Databind to 2.22.1 and refreshed test-only schema/logging dependencies.
+- Added a deterministic end-to-end Action test with a synthetic PDF and mock
+  pull-request files API.
+- Kept Docker build and runtime images on the documented Java 21 baseline.
+- Added direct GitHub Marketplace links to the project documentation.
+
+## 0.4.0 — 2026-07-27
+
 - Added a Docker-based GitHub Action for auditing PDFs changed by pull requests.
 - Read pull-request file lists through the GitHub REST API with explicit
   pagination and completeness checks.
