@@ -17,11 +17,19 @@ Requirements:
 
 - Java 21 or newer
 - Maven 3.9 or newer
+- Docker, when changing the GitHub Action packaging
 
 Run the full build:
 
 ```bash
 mvn clean verify
+```
+
+When action metadata, GitHub integration code, or runtime dependencies change,
+also build the container:
+
+```bash
+docker build -t pdf-text-layer-audit-action .
 ```
 
 Run the executable:
@@ -49,6 +57,7 @@ Use `Co-authored-by` trailers only when each named person made an actual contrib
 Before requesting review, confirm:
 
 - `mvn clean verify` passes;
+- the action container builds when its packaging or integration code changes;
 - the packaged JAR starts;
 - new error paths return the intended exit code;
 - claims in documentation match executable behavior;
