@@ -18,6 +18,14 @@ inputs:
     description: Maximum number of file annotations emitted by the action
     required: false
     default: "20"
+  max_files:
+    description: Maximum number of changed PDF files audited in one pull request
+    required: false
+    default: "50"
+  max_total_size_mib:
+    description: Maximum combined size of changed PDF files in mebibytes
+    required: false
+    default: "500"
   max_file_size_mib:
     description: Maximum size of each PDF in mebibytes
     required: false
@@ -52,6 +60,8 @@ runs:
     - ${{ inputs.token }}
     - ${{ inputs.fail_on_findings }}
     - ${{ inputs.max_annotations }}
+    - ${{ inputs.max_files }}
+    - ${{ inputs.max_total_size_mib }}
     - ${{ inputs.max_file_size_mib }}
     - ${{ inputs.max_pages }}
     - ${{ inputs.tiny_text_threshold_pt }}

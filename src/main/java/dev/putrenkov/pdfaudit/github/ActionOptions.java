@@ -11,6 +11,8 @@ final class ActionOptions {
     private final String token;
     private final boolean failOnFindings;
     private final int maxAnnotations;
+    private final int maxPdfFiles;
+    private final long maxTotalPdfBytes;
     private final long maxFileSizeBytes;
     private final int maxPageCount;
     private final float tinyTextThresholdPoints;
@@ -20,6 +22,8 @@ final class ActionOptions {
             String token,
             boolean failOnFindings,
             int maxAnnotations,
+            int maxPdfFiles,
+            long maxTotalPdfBytes,
             long maxFileSizeBytes,
             int maxPageCount,
             float tinyTextThresholdPoints,
@@ -28,6 +32,8 @@ final class ActionOptions {
         this.token = token;
         this.failOnFindings = failOnFindings;
         this.maxAnnotations = maxAnnotations;
+        this.maxPdfFiles = maxPdfFiles;
+        this.maxTotalPdfBytes = maxTotalPdfBytes;
         this.maxFileSizeBytes = maxFileSizeBytes;
         this.maxPageCount = maxPageCount;
         this.tinyTextThresholdPoints = tinyTextThresholdPoints;
@@ -44,6 +50,12 @@ final class ActionOptions {
         int maxAnnotations = parseNonNegativeInt(
                 environment.getOrDefault("INPUT_MAX_ANNOTATIONS", "20"),
                 "max_annotations");
+        int maxPdfFiles = parsePositiveInt(
+                environment.getOrDefault("INPUT_MAX_FILES", "50"),
+                "max_files");
+        long maxTotalPdfBytes = parseMebibytes(
+                environment.getOrDefault("INPUT_MAX_TOTAL_SIZE_MIB", "500"),
+                "max_total_size_mib");
         long maxFileSizeBytes = parseMebibytes(
                 environment.getOrDefault("INPUT_MAX_FILE_SIZE_MIB", "100"),
                 "max_file_size_mib");
@@ -67,6 +79,8 @@ final class ActionOptions {
                 token,
                 failOnFindings,
                 maxAnnotations,
+                maxPdfFiles,
+                maxTotalPdfBytes,
                 maxFileSizeBytes,
                 maxPageCount,
                 tinyTextThresholdPoints,
@@ -83,6 +97,14 @@ final class ActionOptions {
 
     int maxAnnotations() {
         return maxAnnotations;
+    }
+
+    int maxPdfFiles() {
+        return maxPdfFiles;
+    }
+
+    long maxTotalPdfBytes() {
+        return maxTotalPdfBytes;
     }
 
     long maxFileSizeBytes() {

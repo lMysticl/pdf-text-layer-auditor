@@ -34,9 +34,9 @@ public final class GitHubActionMain {
         if (arguments.length == 0) {
             return environment;
         }
-        if (arguments.length != 7) {
+        if (arguments.length != 9) {
             throw new IllegalArgumentException(
-                    "Expected 7 Docker action input arguments, received "
+                    "Expected 9 Docker action input arguments, received "
                             + arguments.length);
         }
 
@@ -44,10 +44,12 @@ public final class GitHubActionMain {
         combined.put("INPUT_TOKEN", arguments[0]);
         combined.put("INPUT_FAIL_ON_FINDINGS", arguments[1]);
         combined.put("INPUT_MAX_ANNOTATIONS", arguments[2]);
-        combined.put("INPUT_MAX_FILE_SIZE_MIB", arguments[3]);
-        combined.put("INPUT_MAX_PAGES", arguments[4]);
-        combined.put("INPUT_TINY_TEXT_THRESHOLD_PT", arguments[5]);
-        combined.put("INPUT_REPORT_PATH", arguments[6]);
+        combined.put("INPUT_MAX_FILES", arguments[3]);
+        combined.put("INPUT_MAX_TOTAL_SIZE_MIB", arguments[4]);
+        combined.put("INPUT_MAX_FILE_SIZE_MIB", arguments[5]);
+        combined.put("INPUT_MAX_PAGES", arguments[6]);
+        combined.put("INPUT_TINY_TEXT_THRESHOLD_PT", arguments[7]);
+        combined.put("INPUT_REPORT_PATH", arguments[8]);
         return Map.copyOf(combined);
     }
 
@@ -69,6 +71,10 @@ public final class GitHubActionMain {
                     new ChangedPdfSelector().select(
                             pullRequestFiles,
                             context.workspace());
+            ActionWorkloadPolicy.validate(
+                    changedPdfs,
+                    options.maxPdfFiles(),
+                    options.maxTotalPdfBytes());
 
             ActionRun run = new GitHubActionRunner(options.createAuditor()::audit)
                     .run(changedPdfs, options.failOnFindings());
