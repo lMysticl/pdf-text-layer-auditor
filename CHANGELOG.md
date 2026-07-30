@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.1 — 2026-07-30
+
+- Treat glyph mappings containing ISO control characters as unusable Unicode
+  instead of accepting them as a healthy text layer.
+- Added a generated-PDF regression fixture for control-only Unicode mappings.
+
 ## 0.5.0 — 2026-07-28
 
 - Bounded GitHub Action workloads by both changed-PDF count and combined input
