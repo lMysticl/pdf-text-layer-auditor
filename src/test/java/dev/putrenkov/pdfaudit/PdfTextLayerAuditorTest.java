@@ -157,6 +157,26 @@ class PdfTextLayerAuditorTest {
     }
 
     @Test
+    void flagsControlOnlyUnicodeMappingAsMissingUnicode() throws IOException {
+        Path pdf = temporaryDirectory.resolve("control-unicode.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDType3Font font = createType3Font(document, "ControlMapped");
+            font.getCOSObject().setItem(
+                    COSName.TO_UNICODE,
+                    createToUnicodeCMap(document, "<41> <0001>"));
+            addType3TextPage(document, font);
+            document.save(pdf.toFile());
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+
+        assertEquals(1, page.glyphCount());
+        assertEquals(1, page.unicodeCharacterCount());
+        assertEquals(1, page.missingUnicodeGlyphCount());
+        assertEquals(List.of(Finding.MISSING_UNICODE), page.findings());
+    }
+
+    @Test
     void rejectsInvalidTinyTextThreshold() {
         assertThrows(
                 IllegalArgumentException.class,
@@ -296,6 +316,49 @@ class PdfTextLayerAuditorTest {
                             .getBytes(StandardCharsets.US_ASCII));
         }
         page.setContents(pageContent);
+    }
+
+    private static void addType3TextPage(PDDocument document, PDType3Font font)
+            throws IOException {
+        PDPage page = new PDPage();
+        document.addPage(page);
+        page.setResources(new PDResources());
+        page.getResources().put(COSName.getPDFName("F1"), font);
+
+        PDStream pageContent = new PDStream(document);
+        try (var output = pageContent.createOutputStream()) {
+            output.write(
+                    "BT /F1 12 Tf 72 720 Td <41> Tj ET"
+                            .getBytes(StandardCharsets.US_ASCII));
+        }
+        page.setContents(pageContent);
+    }
+
+    private static COSStream createToUnicodeCMap(PDDocument document, String mapping)
+            throws IOException {
+        String cmap = """
+                /CIDInit /ProcSet findresource begin
+                12 dict begin
+                begincmap
+                /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+                /CMapName /ControlMap def
+                /CMapType 2 def
+                1 begincodespacerange
+                <00> <FF>
+                endcodespacerange
+                1 beginbfchar
+                %s
+                endbfchar
+                endcmap
+                CMapName currentdict /CMap defineresource pop
+                end
+                end
+                """.formatted(mapping);
+        COSStream stream = document.getDocument().createCOSStream();
+        try (var output = stream.createOutputStream()) {
+            output.write(cmap.getBytes(StandardCharsets.US_ASCII));
+        }
+        return stream;
     }
 
     private static PDType3Font createType3Font(PDDocument document, String name)

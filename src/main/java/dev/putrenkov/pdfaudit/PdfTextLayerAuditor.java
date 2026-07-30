@@ -179,9 +179,12 @@ public final class PdfTextLayerAuditor {
             glyphCount++;
 
             String unicode = text.getUnicode();
-            if (unicode == null || unicode.isEmpty()) {
+            if (unicode == null
+                    || unicode.isEmpty()
+                    || unicode.codePoints().anyMatch(Character::isISOControl)) {
                 missingUnicodeGlyphCount++;
-            } else {
+            }
+            if (unicode != null && !unicode.isEmpty()) {
                 unicodeCharacterCount += unicode.codePointCount(0, unicode.length());
                 replacementCharacterCount += (int) unicode.codePoints()
                         .filter(codePoint -> codePoint == 0xFFFD)
