@@ -10,6 +10,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.pdfbox.contentstream.operator.Operator;
+import org.apache.pdfbox.contentstream.operator.OperatorName;
+import org.apache.pdfbox.cos.COSBase;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -115,6 +118,8 @@ public final class PdfTextLayerAuditor {
         private final Map<Integer, MutablePage> pages = new LinkedHashMap<>();
         private final Set<Integer> selectedPageNumbers;
         private MutablePage currentPage;
+        private boolean malformedFontFallback;
+        private boolean fontSelectionFailed;
 
         private PositionCollector(
                 List<Integer> selectedPages,
@@ -141,17 +146,62 @@ public final class PdfTextLayerAuditor {
         protected void startPage(PDPage page) throws IOException {
             super.startPage(page);
             currentPage = pages.get(getCurrentPageNo());
+            malformedFontFallback = false;
+            fontSelectionFailed = false;
+        }
+
+        @Override
+        protected void processOperator(Operator operator, List<COSBase> operands)
+                throws IOException {
+            if (OperatorName.SET_FONT_AND_SIZE.equals(operator.getName())) {
+                fontSelectionFailed = false;
+                super.processOperator(operator, operands);
+                if (!fontSelectionFailed) {
+                    malformedFontFallback = false;
+                }
+                return;
+            }
+            super.processOperator(operator, operands);
+        }
+
+        @Override
+        protected void operatorException(
+                Operator operator,
+                List<COSBase> operands,
+                IOException exception
+        ) throws IOException {
+            if (OperatorName.SET_FONT_AND_SIZE.equals(operator.getName())) {
+                fontSelectionFailed = true;
+                if (isRecoverableMalformedType0Font(exception)) {
+                    malformedFontFallback = true;
+                    getGraphicsState().getTextState().setFont(null);
+                    return;
+                }
+            }
+            super.operatorException(operator, operands, exception);
+        }
+
+        private static boolean isRecoverableMalformedType0Font(IOException exception) {
+            return switch (exception.getMessage()) {
+                case "Missing descendant font array",
+                        "Descendant font array is empty",
+                        "Missing descendant font dictionary",
+                        "Missing or wrong type in descendant font dictionary" -> true;
+                default -> false;
+            };
         }
 
         @Override
         protected void processTextPosition(TextPosition text) {
-            currentPage.accept(text);
+            currentPage.accept(text, malformedFontFallback);
             super.processTextPosition(text);
         }
 
         @Override
         protected void endPage(PDPage page) throws IOException {
             currentPage = null;
+            malformedFontFallback = false;
+            fontSelectionFailed = false;
             super.endPage(page);
         }
 
@@ -175,11 +225,11 @@ public final class PdfTextLayerAuditor {
             this.tinyTextThresholdPoints = tinyTextThresholdPoints;
         }
 
-        private void accept(TextPosition text) {
+        private void accept(TextPosition text, boolean mappingUntrusted) {
             glyphCount++;
 
             String unicode = text.getUnicode();
-            if (hasMissingFontMapping(text, unicode)) {
+            if (mappingUntrusted || hasMissingFontMapping(text, unicode)) {
                 missingUnicodeGlyphCount++;
             }
             if (unicode != null && !unicode.isEmpty()) {
@@ -195,9 +245,9 @@ public final class PdfTextLayerAuditor {
             }
 
             PDFont font = text.getFont();
-            String fontName = displayName(font);
-            boolean embedded = font != null && font.isEmbedded();
-            boolean damaged = font != null && font.isDamaged();
+            String fontName = mappingUntrusted ? "<malformed-font>" : displayName(font);
+            boolean embedded = !mappingUntrusted && font != null && font.isEmbedded();
+            boolean damaged = mappingUntrusted || font != null && font.isDamaged();
             FontKey key = new FontKey(fontName, embedded, damaged);
             MutableFont fontAudit = fonts.computeIfAbsent(
                     key,

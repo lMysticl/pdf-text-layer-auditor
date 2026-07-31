@@ -57,7 +57,7 @@ jobs:
 
       - name: Audit changed PDFs
         id: pdf-audit
-        uses: lMysticl/pdf-text-layer-auditor@v0.5.2
+        uses: lMysticl/pdf-text-layer-auditor@v0.5.3
         with:
           token: ${{ github.token }}
 

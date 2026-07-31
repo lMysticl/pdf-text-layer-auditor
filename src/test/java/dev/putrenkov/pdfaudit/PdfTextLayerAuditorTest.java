@@ -193,6 +193,43 @@ class PdfTextLayerAuditorTest {
     }
 
     @Test
+    void continuesAfterType0FontWithoutDescendantFont() throws IOException {
+        Path pdf = temporaryDirectory.resolve("missing-descendant-font.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            PDResources resources = new PDResources();
+            page.setResources(resources);
+
+            COSDictionary malformedFont = new COSDictionary();
+            malformedFont.setItem(COSName.TYPE, COSName.FONT);
+            malformedFont.setItem(COSName.SUBTYPE, COSName.TYPE0);
+            malformedFont.setItem(COSName.BASE_FONT, COSName.getPDFName("MalformedType0"));
+            malformedFont.setItem(COSName.ENCODING, COSName.IDENTITY_H);
+            COSDictionary fonts = new COSDictionary();
+            fonts.setItem(COSName.getPDFName("F1"), malformedFont);
+            resources.getCOSObject().setItem(COSName.FONT, fonts);
+
+            PDStream content = new PDStream(document);
+            try (var output = content.createOutputStream()) {
+                output.write(
+                        "BT /F1 12 Tf 72 720 Td <41> Tj ET"
+                                .getBytes(StandardCharsets.US_ASCII));
+            }
+            page.setContents(content);
+            document.save(pdf.toFile());
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+
+        assertEquals(1, page.glyphCount());
+        assertEquals(1, page.missingUnicodeGlyphCount());
+        assertEquals(List.of(Finding.MISSING_UNICODE), page.findings());
+        assertEquals("<malformed-font>", page.fonts().getFirst().name());
+        assertTrue(page.fonts().getFirst().damaged());
+    }
+
+    @Test
     void rejectsInvalidTinyTextThreshold() {
         assertThrows(
                 IllegalArgumentException.class,
