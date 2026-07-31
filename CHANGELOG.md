@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.2 — 2026-07-31
+
+- Detect fallback text produced by the extractor when a font character code has
+  no usable Unicode mapping, instead of reporting the text layer as healthy.
+- Added a generated-PDF regression fixture for an unmapped Type 3 glyph.
+
 ## 0.5.1 — 2026-07-30
 
 - Treat glyph mappings containing ISO control characters as unusable Unicode

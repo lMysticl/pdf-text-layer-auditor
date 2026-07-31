@@ -12,6 +12,7 @@ import java.util.List;
 import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSFloat;
+import org.apache.pdfbox.cos.COSInteger;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSStream;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -172,6 +173,21 @@ class PdfTextLayerAuditorTest {
 
         assertEquals(1, page.glyphCount());
         assertEquals(1, page.unicodeCharacterCount());
+        assertEquals(1, page.missingUnicodeGlyphCount());
+        assertEquals(List.of(Finding.MISSING_UNICODE), page.findings());
+    }
+
+    @Test
+    void flagsTextStripperFallbackWhenFontHasNoUnicodeMapping() throws IOException {
+        Path pdf = temporaryDirectory.resolve("fallback-unicode.pdf");
+        try (PDDocument document = new PDDocument()) {
+            addType3TextPage(document, createUnmappedType3Font(document));
+            document.save(pdf.toFile());
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+
+        assertEquals(1, page.glyphCount());
         assertEquals(1, page.missingUnicodeGlyphCount());
         assertEquals(List.of(Finding.MISSING_UNICODE), page.findings());
     }
@@ -390,6 +406,45 @@ class PdfTextLayerAuditorTest {
                             .getBytes(StandardCharsets.US_ASCII));
         }
         characterProcedures.setItem(COSName.getPDFName("A"), characterStream);
+        dictionary.setItem(COSName.CHAR_PROCS, characterProcedures);
+        return new PDType3Font(dictionary);
+    }
+
+    private static PDType3Font createUnmappedType3Font(PDDocument document)
+            throws IOException {
+        COSDictionary dictionary = new COSDictionary();
+        dictionary.setItem(COSName.TYPE, COSName.FONT);
+        dictionary.setItem(COSName.SUBTYPE, COSName.TYPE3);
+        dictionary.setItem(
+                COSName.FONT_BBOX,
+                new PDRectangle(0, 0, 600, 700).getCOSArray());
+        dictionary.setItem(
+                COSName.FONT_MATRIX,
+                new Matrix(0.001f, 0, 0, 0.001f, 0, 0).toCOSArray());
+        dictionary.setInt(COSName.FIRST_CHAR, 65);
+        dictionary.setInt(COSName.LAST_CHAR, 65);
+        COSArray widths = new COSArray();
+        widths.add(new COSFloat(600));
+        dictionary.setItem(COSName.WIDTHS, widths);
+
+        COSDictionary encoding = new COSDictionary();
+        encoding.setItem(COSName.BASE_ENCODING, COSName.WIN_ANSI_ENCODING);
+        COSArray differences = new COSArray();
+        differences.add(COSInteger.get(65));
+        differences.add(COSName.getPDFName("integraldisplay"));
+        encoding.setItem(COSName.DIFFERENCES, differences);
+        dictionary.setItem(COSName.ENCODING, encoding);
+
+        COSDictionary characterProcedures = new COSDictionary();
+        COSStream characterStream = document.getDocument().createCOSStream();
+        try (var output = characterStream.createOutputStream()) {
+            output.write(
+                    "0 0 600 700 d1 0 0 600 700 re f"
+                            .getBytes(StandardCharsets.US_ASCII));
+        }
+        characterProcedures.setItem(
+                COSName.getPDFName("integraldisplay"),
+                characterStream);
         dictionary.setItem(COSName.CHAR_PROCS, characterProcedures);
         return new PDType3Font(dictionary);
     }

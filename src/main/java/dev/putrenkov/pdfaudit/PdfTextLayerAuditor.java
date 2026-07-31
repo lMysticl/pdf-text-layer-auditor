@@ -179,9 +179,7 @@ public final class PdfTextLayerAuditor {
             glyphCount++;
 
             String unicode = text.getUnicode();
-            if (unicode == null
-                    || unicode.isEmpty()
-                    || unicode.codePoints().anyMatch(Character::isISOControl)) {
+            if (hasMissingFontMapping(text, unicode)) {
                 missingUnicodeGlyphCount++;
             }
             if (unicode != null && !unicode.isEmpty()) {
@@ -208,6 +206,33 @@ public final class PdfTextLayerAuditor {
                             embedded,
                             damaged));
             fontAudit.glyphCount++;
+        }
+
+        private static boolean hasMissingFontMapping(
+                TextPosition text,
+                String extractedUnicode
+        ) {
+            PDFont font = text.getFont();
+            int[] codes = text.getCharacterCodes();
+            if (font == null || codes == null || codes.length == 0) {
+                return unusableUnicode(extractedUnicode);
+            }
+            try {
+                for (int code : codes) {
+                    if (unusableUnicode(font.toUnicode(code))) {
+                        return true;
+                    }
+                }
+                return false;
+            } catch (RuntimeException exception) {
+                return true;
+            }
+        }
+
+        private static boolean unusableUnicode(String unicode) {
+            return unicode == null
+                    || unicode.isEmpty()
+                    || unicode.codePoints().anyMatch(Character::isISOControl);
         }
 
         private static String displayName(PDFont font) {
