@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.3 — 2026-07-31
+
+- Continue auditing when a malformed Type 0 font is missing its required
+  descendant font data instead of failing the entire PDF.
+- Mark glyphs decoded through PDFBox's fallback font as missing Unicode so the
+  affected page remains reviewable without being reported as healthy.
+- Added a generated-PDF regression fixture for the malformed-font recovery.
+
 ## 0.5.2 — 2026-07-31
 
 - Detect fallback text produced by the extractor when a font character code has
