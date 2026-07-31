@@ -57,7 +57,7 @@ jobs:
 
       - name: Audit changed PDFs
         id: pdf-audit
-        uses: lMysticl/pdf-text-layer-auditor@v0.5.3
+        uses: lMysticl/pdf-text-layer-auditor@v0.5.4
         with:
           token: ${{ github.token }}
 
@@ -249,6 +249,13 @@ docker build -t pdf-text-layer-audit-action .
 ```
 
 The tests create small synthetic PDFs at runtime, so the repository does not need large binary fixtures.
+They include a deterministic [Unicode and PDF font validation matrix](docs/unicode-font-validation.md)
+covering representative scripts, combining and directional characters, non-BMP symbols,
+embedded Type 0 fonts, Type 1 and Type 3 fonts, and malformed mappings. The matrix is
+category-based: no finite test suite can enumerate every font file or every Unicode string.
+
+`mvn verify` enforces code-coverage floors and writes the HTML report to
+`target/site/jacoco/index.html`.
 
 `mvn verify` also creates a CycloneDX 1.6 software bill of materials at `target/bom.json`. Tagged releases publish the SBOM beside the executable JAR and checksum. Release artifacts include signed build-provenance attestations that can be verified with:
 
