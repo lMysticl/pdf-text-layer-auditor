@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.5.4 — 2026-08-01
+
+- Validate ToUnicode destinations across representative writing systems,
+  combining and directional characters, non-BMP symbols, and invalid Unicode
+  categories instead of treating every non-control value as healthy text.
+- Exercise readable embedded Type 0 text plus Type 1, Type 3, missing-map, and
+  malformed-font paths with generated PDF fixtures.
+- Enforce class, method, line, and branch coverage floors during `mvn verify`.
+
 ## 0.5.3 — 2026-07-31
 
 - Continue auditing when a malformed Type 0 font is missing its required

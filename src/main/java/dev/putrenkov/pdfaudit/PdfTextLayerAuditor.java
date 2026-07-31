@@ -265,11 +265,11 @@ public final class PdfTextLayerAuditor {
             PDFont font = text.getFont();
             int[] codes = text.getCharacterCodes();
             if (font == null || codes == null || codes.length == 0) {
-                return unusableUnicode(extractedUnicode);
+                return !isUsableUnicode(extractedUnicode);
             }
             try {
                 for (int code : codes) {
-                    if (unusableUnicode(font.toUnicode(code))) {
+                    if (!isUsableUnicode(font.toUnicode(code))) {
                         return true;
                     }
                 }
@@ -277,12 +277,6 @@ public final class PdfTextLayerAuditor {
             } catch (RuntimeException exception) {
                 return true;
             }
-        }
-
-        private static boolean unusableUnicode(String unicode) {
-            return unicode == null
-                    || unicode.isEmpty()
-                    || unicode.codePoints().anyMatch(Character::isISOControl);
         }
 
         private static String displayName(PDFont font) {
@@ -325,6 +319,24 @@ public final class PdfTextLayerAuditor {
                     fontAudits,
                     findings);
         }
+    }
+
+    static boolean isUsableUnicode(String unicode) {
+        if (unicode == null || unicode.isEmpty()) {
+            return false;
+        }
+        return unicode.codePoints().allMatch(codePoint ->
+                codePoint != 0xFFFD
+                        && !Character.isISOControl(codePoint)
+                        && Character.isDefined(codePoint)
+                        && Character.getType(codePoint) != Character.PRIVATE_USE
+                        && Character.getType(codePoint) != Character.SURROGATE
+                        && !isUnicodeNoncharacter(codePoint));
+    }
+
+    private static boolean isUnicodeNoncharacter(int codePoint) {
+        return codePoint >= 0xFDD0 && codePoint <= 0xFDEF
+                || codePoint >= 0 && (codePoint & 0xFFFE) == 0xFFFE;
     }
 
     private record FontKey(String name, boolean embedded, boolean damaged) {

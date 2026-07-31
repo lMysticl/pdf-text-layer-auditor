@@ -5,10 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Stream;
 import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSFloat;
@@ -22,14 +25,21 @@ import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.common.PDStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType3Font;
+import org.apache.pdfbox.pdmodel.font.PDTrueTypeFont;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.util.Matrix;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class PdfTextLayerAuditorTest {
     @TempDir
@@ -122,6 +132,42 @@ class PdfTextLayerAuditorTest {
     }
 
     @Test
+    void auditsReadableEmbeddedType0TextAcrossLatinGreekAndCyrillic()
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("embedded-type0-unicode.pdf");
+        String text = "Zażółć gęślą jaźń | Ελληνικά Ω | Кириллица Ж";
+        try (PDDocument document = new PDDocument();
+                InputStream input = PDTrueTypeFont.class.getResourceAsStream(
+                        "/org/apache/pdfbox/resources/ttf/LiberationSans-Regular.ttf")) {
+            if (input == null) {
+                throw new IllegalStateException("PDFBox Unicode test font is unavailable.");
+            }
+            PDPage page = new PDPage();
+            document.addPage(page);
+            PDType0Font font = PDType0Font.load(document, input);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(font, 16);
+                content.newLineAtOffset(72, 720);
+                content.showText(text);
+                content.endText();
+            }
+            document.save(pdf.toFile());
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+
+        assertFalse(page.needsAttention());
+        assertEquals(text.codePointCount(0, text.length()), page.unicodeCharacterCount());
+        assertTrue(page.fonts().getFirst().embedded());
+        try (PDDocument document = org.apache.pdfbox.Loader.loadPDF(pdf.toFile())) {
+            assertTrue(new PDFTextStripper().getText(document).contains(text));
+            assertTrue(countNonWhitePixels(
+                    new PDFRenderer(document).renderImageWithDPI(0, 96)) > 500);
+        }
+    }
+
+    @Test
     void appliesConfiguredTinyTextThreshold() throws IOException {
         Path pdf = temporaryDirectory.resolve("small-text.pdf");
         try (PDDocument document = new PDDocument()) {
@@ -175,6 +221,52 @@ class PdfTextLayerAuditorTest {
         assertEquals(1, page.unicodeCharacterCount());
         assertEquals(1, page.missingUnicodeGlyphCount());
         assertEquals(List.of(Finding.MISSING_UNICODE), page.findings());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("validUnicodeMappings")
+    void acceptsValidUnicodeAcrossScriptsMarksDirectionsAndSymbols(
+            String label,
+            String destinationHex,
+            int expectedCodePoints
+    ) throws IOException {
+        Path pdf = temporaryDirectory.resolve("valid-" + label + ".pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDType3Font font = createType3Font(document, "ValidUnicode");
+            font.getCOSObject().setItem(
+                    COSName.TO_UNICODE,
+                    createToUnicodeCMap(document, "<41> <" + destinationHex + ">"));
+            addType3TextPage(document, font);
+            document.save(pdf.toFile());
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+
+        assertEquals(1, page.glyphCount());
+        assertEquals(expectedCodePoints, page.unicodeCharacterCount());
+        assertEquals(0, page.missingUnicodeGlyphCount());
+        assertFalse(page.findings().contains(Finding.MISSING_UNICODE));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("invalidUnicodeMappings")
+    void rejectsNonSemanticUnicodeMappings(String label, String destinationHex)
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("invalid-" + label + ".pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDType3Font font = createType3Font(document, "InvalidUnicode");
+            font.getCOSObject().setItem(
+                    COSName.TO_UNICODE,
+                    createToUnicodeCMap(document, "<41> <" + destinationHex + ">"));
+            addType3TextPage(document, font);
+            document.save(pdf.toFile());
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+
+        assertEquals(1, page.glyphCount());
+        assertEquals(1, page.missingUnicodeGlyphCount());
+        assertTrue(page.findings().contains(Finding.MISSING_UNICODE));
     }
 
     @Test
@@ -412,6 +504,58 @@ class PdfTextLayerAuditorTest {
             output.write(cmap.getBytes(StandardCharsets.US_ASCII));
         }
         return stream;
+    }
+
+    private static Stream<Arguments> validUnicodeMappings() {
+        return Stream.of(
+                Arguments.of("latin", "0041", 1),
+                Arguments.of("latin-diacritic-nfc", "0105", 1),
+                Arguments.of("latin-diacritic-nfd", "00650301", 2),
+                Arguments.of("cyrillic", "0416", 1),
+                Arguments.of("greek", "03A9", 1),
+                Arguments.of("hebrew", "05E9", 1),
+                Arguments.of("arabic", "0634", 1),
+                Arguments.of("devanagari", "0915", 1),
+                Arguments.of("bengali", "0995", 1),
+                Arguments.of("thai", "0E01", 1),
+                Arguments.of("han", "6F22", 1),
+                Arguments.of("hiragana", "3042", 1),
+                Arguments.of("katakana", "30A2", 1),
+                Arguments.of("hangul", "D55C", 1),
+                Arguments.of("math", "2211", 1),
+                Arguments.of("currency", "20AC", 1),
+                Arguments.of("dingbat", "2610", 1),
+                Arguments.of("combining-mark", "0301", 1),
+                Arguments.of("right-to-left-mark", "200F", 1),
+                Arguments.of("emoji", "D83DDE00", 1),
+                Arguments.of("emoji-zwj-sequence", "D83DDC69200DD83DDCBB", 3),
+                Arguments.of("variation-sequence", "2764FE0F", 2)
+        );
+    }
+
+    private static Stream<Arguments> invalidUnicodeMappings() {
+        return Stream.of(
+                Arguments.of("nul", "0000"),
+                Arguments.of("control", "0001"),
+                Arguments.of("replacement", "FFFD"),
+                Arguments.of("private-use", "E000"),
+                Arguments.of("unassigned", "0378"),
+                Arguments.of("noncharacter-plane", "FDD0"),
+                Arguments.of("noncharacter-bmp-end", "FFFE"),
+                Arguments.of("noncharacter-max", "DBDFFFFF")
+        );
+    }
+
+    private static int countNonWhitePixels(BufferedImage image) {
+        int count = 0;
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                if ((image.getRGB(x, y) & 0x00FFFFFF) != 0x00FFFFFF) {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 
     private static PDType3Font createType3Font(PDDocument document, String name)

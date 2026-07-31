@@ -6,7 +6,7 @@
 
     <groupId>dev.putrenkov</groupId>
     <artifactId>pdf-text-layer-auditor</artifactId>
-    <version>0.5.3</version>
+    <version>0.5.4</version>
     <name>PDF Text Layer Auditor</name>
     <description>Diagnose missing or suspicious PDF text layers for search, indexing, accessibility, and extraction workflows.</description>
     <url>https://github.com/lMysticl/pdf-text-layer-auditor</url>
@@ -26,6 +26,7 @@
         <junit.version>6.1.2</junit.version>
         <jackson.version>2.22.1</jackson.version>
         <json-schema-validator.version>3.0.6</json-schema-validator.version>
+        <jacoco.version>0.8.15</jacoco.version>
         <slf4j.version>2.0.18</slf4j.version>
     </properties>
 
@@ -74,6 +75,55 @@
                 <version>3.5.6</version>
                 <configuration>
                     <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>coverage-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <rules>
+                        <rule>
+                            <element>BUNDLE</element>
+                            <limits>
+                                <limit>
+                                    <counter>CLASS</counter>
+                                    <value>COVEREDRATIO</value>
+                                    <minimum>1.00</minimum>
+                                </limit>
+                                <limit>
+                                    <counter>METHOD</counter>
+                                    <value>COVEREDRATIO</value>
+                                    <minimum>0.95</minimum>
+                                </limit>
+                                <limit>
+                                    <counter>LINE</counter>
+                                    <value>COVEREDRATIO</value>
+                                    <minimum>0.85</minimum>
+                                </limit>
+                                <limit>
+                                    <counter>BRANCH</counter>
+                                    <value>COVEREDRATIO</value>
+                                    <minimum>0.70</minimum>
+                                </limit>
+                            </limits>
+                        </rule>
+                    </rules>
                 </configuration>
             </plugin>
             <plugin>
