@@ -483,6 +483,42 @@ class PdfTextLayerAuditorTest {
     }
 
     @Test
+    void auditsVerticalCjkTextInEmbeddedCffCidFont() throws IOException {
+        Path pdf;
+        String text = "漢字あア한글";
+        try (InputStream input = PdfTextLayerAuditorTest.class.getResourceAsStream(
+                "/fonts/vertical-cjk-cff.pdf")) {
+            if (input == null) {
+                throw new IllegalStateException("Vertical CJK/CFF fixture is unavailable.");
+            }
+            pdf = temporaryDirectory.resolve("vertical-cjk-cff.pdf");
+            java.nio.file.Files.copy(input, pdf);
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+
+        assertEquals(text.codePointCount(0, text.length()), page.glyphCount());
+        assertEquals(0, page.missingUnicodeGlyphCount());
+        assertTrue(page.geometryVisibility().verticalGlyphCount() > 0);
+        FontAudit font = page.fonts().getFirst();
+        assertEquals("Type0", font.subtype());
+        assertEquals("Identity-V", font.encoding());
+        assertTrue(font.embedded());
+        assertFalse(font.damaged());
+        assertTrue(font.vertical());
+        assertTrue(font.toUnicodePresent());
+        assertTrue(page.unicodeProfile().scripts().containsAll(
+                List.of("HAN", "HIRAGANA", "KATAKANA", "HANGUL")));
+        try (PDDocument document = Loader.loadPDF(pdf.toFile())) {
+            String extracted = new PDFTextStripper().getText(document)
+                    .replaceAll("\\s+", "");
+            assertTrue(extracted.contains(text));
+            assertTrue(countNonWhitePixels(
+                    new PDFRenderer(document).renderImageWithDPI(0, 96)) > 100);
+        }
+    }
+
+    @Test
     void appliesConfiguredTinyTextThreshold() throws IOException {
         Path pdf = temporaryDirectory.resolve("small-text.pdf");
         try (PDDocument document = new PDDocument()) {
