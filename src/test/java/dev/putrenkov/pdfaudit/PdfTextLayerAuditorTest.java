@@ -32,10 +32,15 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
 import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentGroup;
+import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentProperties;
+import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentMembershipDictionary;
+import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.pdmodel.graphics.shading.PDShadingType2;
 import org.apache.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState;
 import org.apache.pdfbox.pdmodel.graphics.state.RenderingMode;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
@@ -218,6 +223,119 @@ class PdfTextLayerAuditorTest {
         assertEquals(1, geometry.clippedGlyphCount());
         assertEquals(1, geometry.duplicateOverlapGlyphCount());
         assertEquals(0, geometry.verticalGlyphCount());
+    }
+
+    @Test
+    void auditsAllAnnotationAppearanceStatesAndOptionalContentDestinations()
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("annotation-optional-content.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.LETTER);
+            document.addPage(page);
+
+            PDOptionalContentGroup group = new PDOptionalContentGroup("review layer");
+            COSDictionary usage = new COSDictionary();
+            COSDictionary view = new COSDictionary();
+            view.setItem(COSName.getPDFName("ViewState"), COSName.ON);
+            usage.setItem(COSName.getPDFName("View"), view);
+            COSDictionary print = new COSDictionary();
+            print.setItem(COSName.getPDFName("PrintState"), COSName.OFF);
+            usage.setItem(COSName.getPDFName("Print"), print);
+            COSDictionary export = new COSDictionary();
+            export.setItem(COSName.getPDFName("ExportState"), COSName.ON);
+            usage.setItem(COSName.getPDFName("Export"), export);
+            group.getCOSObject().setItem(COSName.getPDFName("Usage"), usage);
+            PDOptionalContentProperties properties = new PDOptionalContentProperties();
+            properties.addGroup(group);
+            properties.setGroupEnabled(group, true);
+            document.getDocumentCatalog().setOCProperties(properties);
+
+            PDAppearanceStream normal = createAppearance(
+                    document,
+                    new PDType1Font(Standard14Fonts.FontName.HELVETICA),
+                    "OK");
+            PDAppearanceStream rollover = createUnmappedAppearance(document);
+            PDAppearanceDictionary appearances = new PDAppearanceDictionary();
+            appearances.setNormalAppearance(normal);
+            appearances.setRolloverAppearance(rollover);
+            PDAnnotationWidget widget = new PDAnnotationWidget();
+            widget.setRectangle(new PDRectangle(72, 680, 120, 30));
+            widget.setAppearance(appearances);
+            widget.setOptionalContent(group);
+            page.setAnnotations(List.of(widget));
+            document.save(pdf.toFile());
+        }
+
+        AuditReport report = new PdfTextLayerAuditor().audit(pdf);
+        PageAudit page = report.pages().getFirst();
+
+        assertTrue(report.completeness().annotations());
+        assertTrue(report.completeness().optionalContent());
+        assertEquals(2, page.annotationAppearances().appearanceStreamCount());
+        assertEquals(3, page.annotationAppearances().glyphCount());
+        assertEquals(1, page.annotationAppearances().missingUnicodeGlyphCount());
+        assertTrue(page.findings().contains(Finding.ANNOTATION_MISSING_UNICODE));
+        assertEquals(1, page.optionalContent().referenceCount());
+        assertEquals(0, page.optionalContent().hiddenInViewReferenceCount());
+        assertEquals(1, page.optionalContent().hiddenInPrintReferenceCount());
+        assertEquals(0, page.optionalContent().hiddenInExportReferenceCount());
+    }
+
+    @Test
+    void evaluatesOptionalContentMembershipPoliciesExpressionsAndFailures()
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("optional-membership.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDOptionalContentGroup on = new PDOptionalContentGroup("on");
+            PDOptionalContentGroup off = new PDOptionalContentGroup("off");
+            PDOptionalContentProperties properties = new PDOptionalContentProperties();
+            properties.addGroup(on);
+            properties.addGroup(off);
+            properties.setGroupEnabled(on, true);
+            properties.setGroupEnabled(off, false);
+            document.getDocumentCatalog().setOCProperties(properties);
+
+            PDPage page = new PDPage(PDRectangle.LETTER);
+            document.addPage(page);
+            List<PDOptionalContentMembershipDictionary> memberships = List.of(
+                    membership(List.of(on, off), COSName.ANY_ON, null),
+                    membership(List.of(on, off), COSName.ALL_ON, null),
+                    membership(List.of(on, off), COSName.ANY_OFF, null),
+                    membership(List.of(on, off), COSName.ALL_OFF, null),
+                    membership(List.of(), null, expression("And", on, off)),
+                    membership(List.of(), null, expression("Or", on, off)),
+                    membership(List.of(), null, expression("Not", off)),
+                    membership(List.of(), null, new COSArray()));
+            memberships.getLast().getCOSObject().setItem(
+                    COSName.VE,
+                    new COSArray(List.of(COSName.getPDFName("Not"))));
+
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                for (PDOptionalContentMembershipDictionary membership : memberships) {
+                    content.beginMarkedContent(COSName.OC, membership);
+                    content.moveTo(10, 10);
+                    content.lineTo(20, 20);
+                    content.stroke();
+                    content.endMarkedContent();
+                }
+                PDFormXObject form = new PDFormXObject(new PDStream(document));
+                form.setBBox(new PDRectangle(10, 10));
+                form.setResources(new PDResources());
+                form.setOptionalContent(on);
+                content.drawForm(form);
+            }
+            document.save(pdf.toFile());
+        }
+
+        AuditReport report = new PdfTextLayerAuditor().audit(pdf);
+        OptionalContentAudit optional = report.pages().getFirst().optionalContent();
+
+        assertFalse(optional.complete());
+        assertFalse(report.completeness().optionalContent());
+        assertEquals(9, optional.referenceCount());
+        assertEquals(8, optional.membershipReferenceCount());
+        assertEquals(3, optional.evaluationFailureCount());
+        assertTrue(optional.hiddenInViewReferenceCount() > 0);
     }
 
     @Test
@@ -865,6 +983,70 @@ class PdfTextLayerAuditorTest {
         characterProcedures.setItem(COSName.getPDFName("A"), characterStream);
         dictionary.setItem(COSName.CHAR_PROCS, characterProcedures);
         return new PDType3Font(dictionary);
+    }
+
+    private static PDAppearanceStream createAppearance(
+            PDDocument document,
+            org.apache.pdfbox.pdmodel.font.PDFont font,
+            String text
+    ) throws IOException {
+        PDAppearanceStream appearance = new PDAppearanceStream(document);
+        appearance.setBBox(new PDRectangle(120, 30));
+        appearance.setResources(new PDResources());
+        try (PDPageContentStream content =
+                new PDPageContentStream(document, appearance)) {
+            content.beginText();
+            content.setFont(font, 12);
+            content.newLineAtOffset(5, 10);
+            content.showText(text);
+            content.endText();
+        }
+        return appearance;
+    }
+
+    private static PDOptionalContentMembershipDictionary membership(
+            List<PDOptionalContentGroup> groups,
+            COSName policy,
+            COSArray expression
+    ) {
+        PDOptionalContentMembershipDictionary membership =
+                new PDOptionalContentMembershipDictionary();
+        membership.setOCGs(new java.util.ArrayList<>(groups));
+        if (policy != null) {
+            membership.setVisibilityPolicy(policy);
+        }
+        if (expression != null) {
+            membership.getCOSObject().setItem(COSName.VE, expression);
+        }
+        return membership;
+    }
+
+    private static COSArray expression(
+            String operator,
+            PDOptionalContentGroup... groups
+    ) {
+        COSArray expression = new COSArray();
+        expression.add(COSName.getPDFName(operator));
+        for (PDOptionalContentGroup group : groups) {
+            expression.add(group.getCOSObject());
+        }
+        return expression;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static PDAppearanceStream createUnmappedAppearance(PDDocument document)
+            throws IOException {
+        PDAppearanceStream appearance = new PDAppearanceStream(document);
+        appearance.setBBox(new PDRectangle(120, 30));
+        PDResources resources = new PDResources();
+        COSName fontName = resources.add(createUnmappedType3Font(document));
+        appearance.setResources(resources);
+        try (PDPageContentStream content =
+                new PDPageContentStream(document, appearance)) {
+            content.appendRawCommands(
+                    "BT /" + fontName.getName() + " 12 Tf 5 10 Td <41> Tj ET\n");
+        }
+        return appearance;
     }
 
     private static PDType3Font createUnmappedType3Font(PDDocument document)

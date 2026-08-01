@@ -92,6 +92,8 @@ public final class JsonReportPrinter {
         appendReadingOrder(json, page.readingOrder());
         appendGeometryVisibility(json, page.geometryVisibility());
         appendVisualContent(json, page.visualContent());
+        appendAnnotationAppearances(json, page.annotationAppearances());
+        appendOptionalContent(json, page.optionalContent());
         appendBooleanProperty(json, "needsAttention", page.needsAttention());
         json.append(",\"fonts\":[");
 
@@ -207,6 +209,56 @@ public final class JsonReportPrinter {
                 json,
                 "optionalContentPresent",
                 visual.optionalContentPresent());
+        json.append('}');
+    }
+
+    private static void appendAnnotationAppearances(
+            StringBuilder json,
+            AnnotationAppearanceAudit annotations
+    ) {
+        appendPropertyPrefix(json, "annotationAppearances");
+        json.append('{');
+        appendBooleanProperty(json, "assessed", annotations.assessed());
+        appendNullableNumberProperty(
+                json, "appearanceStreamCount", annotations.appearanceStreamCount());
+        appendNullableNumberProperty(json, "glyphCount", annotations.glyphCount());
+        appendNullableNumberProperty(
+                json, "unicodeCharacterCount", annotations.unicodeCharacterCount());
+        appendNullableNumberProperty(
+                json, "missingUnicodeGlyphCount", annotations.missingUnicodeGlyphCount());
+        appendNullableNumberProperty(
+                json, "replacementCharacterCount", annotations.replacementCharacterCount());
+        json.append('}');
+    }
+
+    private static void appendOptionalContent(
+            StringBuilder json,
+            OptionalContentAudit optionalContent
+    ) {
+        appendPropertyPrefix(json, "optionalContent");
+        json.append('{');
+        appendBooleanProperty(json, "complete", optionalContent.complete());
+        appendNumberProperty(json, "referenceCount", optionalContent.referenceCount());
+        appendNumberProperty(
+                json,
+                "membershipReferenceCount",
+                optionalContent.membershipReferenceCount());
+        appendNumberProperty(
+                json,
+                "hiddenInViewReferenceCount",
+                optionalContent.hiddenInViewReferenceCount());
+        appendNumberProperty(
+                json,
+                "hiddenInPrintReferenceCount",
+                optionalContent.hiddenInPrintReferenceCount());
+        appendNumberProperty(
+                json,
+                "hiddenInExportReferenceCount",
+                optionalContent.hiddenInExportReferenceCount());
+        appendNumberProperty(
+                json,
+                "evaluationFailureCount",
+                optionalContent.evaluationFailureCount());
         json.append('}');
     }
 

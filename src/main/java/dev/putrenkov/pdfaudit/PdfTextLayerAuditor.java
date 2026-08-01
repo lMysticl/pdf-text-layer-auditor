@@ -128,7 +128,8 @@ public final class PdfTextLayerAuditor {
                     extractionAllowed,
                     tinyTextThresholdPoints,
                     new ParseHealth(true, !diagnostics.isEmpty(), diagnostics),
-                    EvidenceCompleteness.phaseOne(),
+                    EvidenceCompleteness.phaseTwo(visualEvidence.values().stream()
+                            .allMatch(evidence -> evidence.optionalContent().complete())),
                     collector.pages(positionOrder, visualEvidence));
         }
     }
@@ -572,6 +573,14 @@ public final class PdfTextLayerAuditor {
             if (classification == PageClassification.SPARSE_OCR) {
                 findings.add(Finding.SPARSE_TEXT_OVER_FULL_PAGE_IMAGE);
             }
+            AnnotationAppearanceAudit annotationAppearances =
+                    visualEvidence.annotationAppearances();
+            if (annotationAppearances.missingUnicodeGlyphCount() > 0) {
+                findings.add(Finding.ANNOTATION_MISSING_UNICODE);
+            }
+            if (annotationAppearances.replacementCharacterCount() > 0) {
+                findings.add(Finding.ANNOTATION_REPLACEMENT_CHARACTERS);
+            }
 
             List<FontAudit> fontAudits = fonts.values().stream()
                     .map(MutableFont::freeze)
@@ -605,6 +614,8 @@ public final class PdfTextLayerAuditor {
                             canonicalPositionText.codePointCount(0, canonicalPositionText.length())),
                     visualEvidence.geometryVisibility(),
                     visualContent,
+                    annotationAppearances,
+                    visualEvidence.optionalContent(),
                     fontAudits,
                     findings);
         }

@@ -14,6 +14,11 @@
   pages from text, path, and image evidence.
 - Measure image coverage, painted vector paths, annotations, widgets, optional
   content, and glyph paint/alpha/crop/clip/overlap/rotation observations.
+- Inspect every normal, rollover, and down annotation appearance stream for
+  missing or replacement Unicode without merging appearance text into page text.
+- Evaluate OCG and OCMD visibility, including visibility expressions, for View,
+  Print, and Export destinations; malformed/cyclic expressions remain explicitly
+  incomplete.
 - Flag near-full-page combined image coverage with at most 32 extracted characters as a sparse
   OCR candidate while retaining visibility observations as non-failing evidence
   until corpus calibration proves safe decision thresholds.
