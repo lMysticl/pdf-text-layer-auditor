@@ -11,12 +11,14 @@ number of Unicode strings, so “every font” cannot be proved by enumeration.
 | Writing systems | Latin (NFC and NFD), Greek, Cyrillic, Hebrew, Arabic, Devanagari, Bengali, Thai, Han, Hiragana, Katakana, Hangul |
 | Symbols | Math, currency, dingbats, emoji, emoji ZWJ sequence, variation sequence |
 | Direction and composition | Combining mark, right-to-left mark, multi-code-point ToUnicode destination, supplementary-plane characters |
-| Font structures | Embedded Type 0 TrueType, Standard 14 Type 1, Type 3 with ToUnicode, Type 3 without ToUnicode, malformed Type 0 |
+| Font structures | Embedded horizontal Type 0/CIDFontType2 TrueType; embedded vertical `Identity-V` Type 0/CIDFontType0 CFF; Standard 14 non-embedded Type 1; Type 3 with/without ToUnicode; malformed/damaged Type 0 |
 | Rejected mappings | NUL and C0 controls, U+FFFD, private-use, unassigned, BMP and supplementary-plane noncharacters |
 | Observable proof | Unicode code-point counts, missing-mapping findings, embedded/damaged font state, extracted text, and non-blank rendered pixels |
 
-The PDF fixtures are generated in memory during the test run. This keeps the
-tests deterministic and avoids depending on fonts installed on the CI host.
+Most PDF fixtures are generated in memory during the test run. The vertical
+CJK/CFF case is a deterministic checked-in PDF generated from an OFL-1.1 Noto
+Sans CJK subset; its source, hash, license and rebuild script are retained next
+to the fixture. Tests never depend on fonts installed on the CI host.
 
 ## What this proves
 
@@ -31,6 +33,9 @@ tests deterministic and avoids depending on fonts installed on the CI host.
   Greek, and Cyrillic text.
 - A Type 0 font without `/ToUnicode` is reported as implicit mapping even when
   PDFBox can infer a plausible string from its encoding.
+- A real CIDFontType0 CFF program with `Identity-V` preserves exact Han,
+  Hiragana, Katakana and Hangul extraction, reports vertical font/glyph
+  evidence, and renders non-blank pixels.
 
 ## Boundary
 
