@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.6.1 — 2026-08-01
+
+- Convert JVM heap and stack exhaustion into stable machine-readable work-limit
+  failures instead of leaking an untyped stack trace to downstream runners.
+- Suppress PDFBox and FontBox console warnings inside the audit scope while
+  retaining the bounded parser-recovery warning count in the JSON report.
+- Validate both fixes against real PDFBox issue attachments that previously
+  exhausted the 512 MiB heap or exceeded the downstream stderr budget.
+
 ## 0.6.0 — 2026-08-01
 
 - Introduce report schema v2 with explicit parse health, evidence completeness,
