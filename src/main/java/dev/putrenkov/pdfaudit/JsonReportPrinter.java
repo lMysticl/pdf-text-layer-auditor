@@ -47,6 +47,7 @@ public final class JsonReportPrinter {
         json.append('{');
         appendBooleanProperty(json, "complete", health.complete());
         appendBooleanProperty(json, "recovered", health.recovered());
+        appendNumberProperty(json, "parserWarningCount", health.parserWarningCount());
         json.append(",\"diagnostics\":[");
         for (int index = 0; index < health.diagnostics().size(); index++) {
             if (index > 0) {

@@ -40,7 +40,7 @@ public record AuditReport(
                 encrypted,
                 extractionAllowed,
                 tinyTextThresholdPoints,
-                new ParseHealth(true, false, List.of()),
+                new ParseHealth(true, false, 0, List.of()),
                 EvidenceCompleteness.phaseZero(),
                 pages);
     }
@@ -50,6 +50,6 @@ public record AuditReport(
     }
 
     public boolean needsAttention() {
-        return pagesNeedingAttention() > 0;
+        return parseHealth.recovered() || !parseHealth.complete() || pagesNeedingAttention() > 0;
     }
 }

@@ -111,7 +111,8 @@ public final class PdfTextLayerAuditor {
                     "PDF exceeds the configured size limit of " + maxFileSizeBytes + " bytes");
         }
 
-        try (PDDocument document = Loader.loadPDF(
+        try (PdfBoxDiagnosticCapture parserDiagnostics = new PdfBoxDiagnosticCapture();
+                PDDocument document = Loader.loadPDF(
                 file.toFile(),
                 IOUtils.createTempFileOnlyStreamCache())) {
             int pageCount = document.getNumberOfPages();
@@ -142,6 +143,7 @@ public final class PdfTextLayerAuditor {
                     PageVisualAnalyzer.analyze(document, selectedPages, workLimits);
 
             List<ParseDiagnostic> diagnostics = collector.diagnostics();
+            int parserWarningCount = parserDiagnostics.warningCount();
 
             return new AuditReport(
                     file,
@@ -150,7 +152,11 @@ public final class PdfTextLayerAuditor {
                     document.isEncrypted(),
                     extractionAllowed,
                     tinyTextThresholdPoints,
-                    new ParseHealth(true, !diagnostics.isEmpty(), diagnostics),
+                    new ParseHealth(
+                            true,
+                            parserWarningCount > 0 || !diagnostics.isEmpty(),
+                            parserWarningCount,
+                            diagnostics),
                     EvidenceCompleteness.phaseTwo(visualEvidence.values().stream()
                             .allMatch(evidence -> evidence.optionalContent().complete())),
                     collector.pages(positionOrder, visualEvidence));

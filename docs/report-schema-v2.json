@@ -41,10 +41,11 @@
     "parseHealth": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["complete", "recovered", "diagnostics"],
+      "required": ["complete", "recovered", "parserWarningCount", "diagnostics"],
       "properties": {
         "complete": { "type": "boolean" },
         "recovered": { "type": "boolean" },
+        "parserWarningCount": { "type": "integer", "minimum": 0 },
         "diagnostics": {
           "type": "array",
           "items": { "$ref": "#/$defs/diagnostic" }

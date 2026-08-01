@@ -29,6 +29,9 @@
 - Stop adversarial or accidentally pathological documents at explicit glyph,
   semantic-character, font, image, path, annotation, appearance-stream, and
   optional-content work budgets, with a stable machine-readable failure marker.
+- Capture PDFBox parser-package recovery warnings as structured document
+  evidence, and convert unchecked malformed-page-tree failures into bounded
+  exit-code-2 diagnostics without a stack trace.
 - Flag near-full-page combined image coverage with at most 32 extracted characters as a sparse
   OCR candidate while retaining visibility observations as non-failing evidence
   until corpus calibration proves safe decision thresholds.
