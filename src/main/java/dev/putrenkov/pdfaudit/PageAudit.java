@@ -14,6 +14,7 @@ public record PageAudit(
         SemanticMappingAudit semanticMapping,
         ReadingOrderAudit readingOrder,
         GeometryVisibilityAudit geometryVisibility,
+        VisualContentAudit visualContent,
         List<FontAudit> fonts,
         List<Finding> findings
 ) {
@@ -31,6 +32,7 @@ public record PageAudit(
         java.util.Objects.requireNonNull(semanticMapping, "semanticMapping");
         java.util.Objects.requireNonNull(readingOrder, "readingOrder");
         java.util.Objects.requireNonNull(geometryVisibility, "geometryVisibility");
+        java.util.Objects.requireNonNull(visualContent, "visualContent");
         fonts = List.copyOf(fonts);
         findings = List.copyOf(findings);
     }
@@ -65,6 +67,7 @@ public record PageAudit(
                         unicodeCharacterCount,
                         unicodeCharacterCount),
                 GeometryVisibilityAudit.unassessed(),
+                VisualContentAudit.unassessed(),
                 fonts,
                 findings);
     }

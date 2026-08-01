@@ -101,6 +101,7 @@
         "semanticMapping",
         "readingOrder",
         "geometryVisibility",
+        "visualContent",
         "needsAttention",
         "fonts",
         "findings"
@@ -128,6 +129,7 @@
         "semanticMapping": { "$ref": "#/$defs/semanticMapping" },
         "readingOrder": { "$ref": "#/$defs/readingOrder" },
         "geometryVisibility": { "$ref": "#/$defs/geometryVisibility" },
+        "visualContent": { "$ref": "#/$defs/visualContent" },
         "needsAttention": { "type": "boolean" },
         "fonts": {
           "type": "array",
@@ -192,17 +194,57 @@
       "additionalProperties": false,
       "required": [
         "assessed",
+        "visibleGlyphCount",
         "invisibleGlyphCount",
         "offPageGlyphCount",
         "clippedGlyphCount",
-        "transparentGlyphCount"
+        "transparentGlyphCount",
+        "duplicateOverlapGlyphCount",
+        "rotatedGlyphCount",
+        "verticalGlyphCount"
       ],
       "properties": {
         "assessed": { "type": "boolean" },
+        "visibleGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
         "invisibleGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
         "offPageGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
         "clippedGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
-        "transparentGlyphCount": { "type": ["integer", "null"], "minimum": 0 }
+        "transparentGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "duplicateOverlapGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "rotatedGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "verticalGlyphCount": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "visualContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessed",
+        "imageCount",
+        "maxImageCoverageRatio",
+        "combinedImageCoverageRatio",
+        "paintedVectorPathCount",
+        "annotationCount",
+        "widgetAnnotationCount",
+        "optionalContentPresent"
+      ],
+      "properties": {
+        "assessed": { "type": "boolean" },
+        "imageCount": { "type": ["integer", "null"], "minimum": 0 },
+        "maxImageCoverageRatio": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "combinedImageCoverageRatio": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "paintedVectorPathCount": { "type": ["integer", "null"], "minimum": 0 },
+        "annotationCount": { "type": ["integer", "null"], "minimum": 0 },
+        "widgetAnnotationCount": { "type": ["integer", "null"], "minimum": 0 },
+        "optionalContentPresent": { "type": ["boolean", "null"] }
       }
     },
     "font": {
@@ -230,7 +272,8 @@
             "TINY_TEXT",
             "MALFORMED_TOUNICODE_CMAP",
             "INVALID_TOUNICODE_CMAP",
-            "READING_ORDER_DIVERGENCE"
+            "READING_ORDER_DIVERGENCE",
+            "SPARSE_TEXT_OVER_FULL_PAGE_IMAGE"
           ]
         },
         "description": { "type": "string" }

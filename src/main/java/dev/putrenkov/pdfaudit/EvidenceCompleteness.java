@@ -13,6 +13,10 @@ public record EvidenceCompleteness(
         return new EvidenceCompleteness(true, true, true, true, false, false, false);
     }
 
+    public static EvidenceCompleteness phaseOne() {
+        return new EvidenceCompleteness(true, true, true, true, true, false, false);
+    }
+
     public boolean completeForDirectRouting() {
         return pageContent
                 && formXObjects

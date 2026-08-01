@@ -10,6 +10,13 @@
   diagnostics and page findings instead of relying on PDFBox log output.
 - Detect character-sequence divergence between content-stream and
   position-sorted extraction without retaining extracted document text.
+- Classify blank, vector-only, image-only, native-text, mixed, and sparse-OCR
+  pages from text, path, and image evidence.
+- Measure image coverage, painted vector paths, annotations, widgets, optional
+  content, and glyph paint/alpha/crop/clip/overlap/rotation observations.
+- Flag near-full-page combined image coverage with at most 32 extracted characters as a sparse
+  OCR candidate while retaining visibility observations as non-failing evidence
+  until corpus calibration proves safe decision thresholds.
 - Keep report and GitHub Action schemas v1 published for existing consumers.
 
 ## 0.5.4 — 2026-08-01
