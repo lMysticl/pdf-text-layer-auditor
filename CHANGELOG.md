@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.0 — 2026-08-01
+
 - Introduce report schema v2 with explicit parse health, evidence completeness,
   text-surface, semantic-mapping, reading-order, and geometry-assessment fields.
 - Treat valid marked-content `/ActualText` as semantic text while preserving
@@ -35,6 +37,14 @@
 - Flag near-full-page combined image coverage with at most 32 extracted characters as a sparse
   OCR candidate while retaining visibility observations as non-failing evidence
   until corpus calibration proves safe decision thresholds.
+- Detect localized partial text layers with a bounded 8-by-8 image/text spatial
+  grid even when the old 32-character sparse threshold is exceeded.
+- Require a downstream extraction profile for strong right-to-left text after
+  exact Arabic, Hebrew, and Syriac regressions demonstrated bidi-order variance.
+- Add exact explicit-ToUnicode extraction/profile oracles for 17 language cases.
+- Inventory AcroForm/XFA fields, signatures, missing widget appearances,
+  embedded and associated files, and PDF portfolios with bounded cycle-safe
+  traversal.
 - Keep report and GitHub Action schemas v1 published for existing consumers.
 
 ## 0.5.4 — 2026-08-01
