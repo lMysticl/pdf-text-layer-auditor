@@ -10,7 +10,11 @@ public enum Finding {
     READING_ORDER_DIVERGENCE(
             "Content-stream and position-based extraction produce different character order."),
     SPARSE_TEXT_OVER_FULL_PAGE_IMAGE(
-            "A near-full-page image has only a small extracted text layer; OCR may be incomplete.");
+            "A near-full-page image has only a small extracted text layer; OCR may be incomplete."),
+    ANNOTATION_MISSING_UNICODE(
+            "Some annotation appearance glyphs have no usable Unicode mapping."),
+    ANNOTATION_REPLACEMENT_CHARACTERS(
+            "Annotation appearance text contains Unicode replacement characters.");
 
     private final String description;
 

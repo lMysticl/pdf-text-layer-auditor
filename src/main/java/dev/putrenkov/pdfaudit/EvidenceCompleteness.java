@@ -17,6 +17,11 @@ public record EvidenceCompleteness(
         return new EvidenceCompleteness(true, true, true, true, true, false, false);
     }
 
+    public static EvidenceCompleteness phaseTwo(boolean optionalContentComplete) {
+        return new EvidenceCompleteness(
+                true, true, true, true, true, true, optionalContentComplete);
+    }
+
     public boolean completeForDirectRouting() {
         return pageContent
                 && formXObjects

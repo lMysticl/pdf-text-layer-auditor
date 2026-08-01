@@ -15,6 +15,8 @@ public record PageAudit(
         ReadingOrderAudit readingOrder,
         GeometryVisibilityAudit geometryVisibility,
         VisualContentAudit visualContent,
+        AnnotationAppearanceAudit annotationAppearances,
+        OptionalContentAudit optionalContent,
         List<FontAudit> fonts,
         List<Finding> findings
 ) {
@@ -33,6 +35,8 @@ public record PageAudit(
         java.util.Objects.requireNonNull(readingOrder, "readingOrder");
         java.util.Objects.requireNonNull(geometryVisibility, "geometryVisibility");
         java.util.Objects.requireNonNull(visualContent, "visualContent");
+        java.util.Objects.requireNonNull(annotationAppearances, "annotationAppearances");
+        java.util.Objects.requireNonNull(optionalContent, "optionalContent");
         fonts = List.copyOf(fonts);
         findings = List.copyOf(findings);
     }
@@ -68,6 +72,8 @@ public record PageAudit(
                         unicodeCharacterCount),
                 GeometryVisibilityAudit.unassessed(),
                 VisualContentAudit.unassessed(),
+                AnnotationAppearanceAudit.unassessed(),
+                new OptionalContentAudit(true, 0, 0, 0, 0, 0, 0),
                 fonts,
                 findings);
     }

@@ -102,6 +102,8 @@
         "readingOrder",
         "geometryVisibility",
         "visualContent",
+        "annotationAppearances",
+        "optionalContent",
         "needsAttention",
         "fonts",
         "findings"
@@ -130,6 +132,8 @@
         "readingOrder": { "$ref": "#/$defs/readingOrder" },
         "geometryVisibility": { "$ref": "#/$defs/geometryVisibility" },
         "visualContent": { "$ref": "#/$defs/visualContent" },
+        "annotationAppearances": { "$ref": "#/$defs/annotationAppearances" },
+        "optionalContent": { "$ref": "#/$defs/optionalContent" },
         "needsAttention": { "type": "boolean" },
         "fonts": {
           "type": "array",
@@ -247,6 +251,48 @@
         "optionalContentPresent": { "type": ["boolean", "null"] }
       }
     },
+    "annotationAppearances": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessed",
+        "appearanceStreamCount",
+        "glyphCount",
+        "unicodeCharacterCount",
+        "missingUnicodeGlyphCount",
+        "replacementCharacterCount"
+      ],
+      "properties": {
+        "assessed": { "type": "boolean" },
+        "appearanceStreamCount": { "type": ["integer", "null"], "minimum": 0 },
+        "glyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "unicodeCharacterCount": { "type": ["integer", "null"], "minimum": 0 },
+        "missingUnicodeGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "replacementCharacterCount": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "optionalContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "complete",
+        "referenceCount",
+        "membershipReferenceCount",
+        "hiddenInViewReferenceCount",
+        "hiddenInPrintReferenceCount",
+        "hiddenInExportReferenceCount",
+        "evaluationFailureCount"
+      ],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "referenceCount": { "type": "integer", "minimum": 0 },
+        "membershipReferenceCount": { "type": "integer", "minimum": 0 },
+        "hiddenInViewReferenceCount": { "type": "integer", "minimum": 0 },
+        "hiddenInPrintReferenceCount": { "type": "integer", "minimum": 0 },
+        "hiddenInExportReferenceCount": { "type": "integer", "minimum": 0 },
+        "evaluationFailureCount": { "type": "integer", "minimum": 0 }
+      }
+    },
     "font": {
       "type": "object",
       "additionalProperties": false,
@@ -273,7 +319,9 @@
             "MALFORMED_TOUNICODE_CMAP",
             "INVALID_TOUNICODE_CMAP",
             "READING_ORDER_DIVERGENCE",
-            "SPARSE_TEXT_OVER_FULL_PAGE_IMAGE"
+            "SPARSE_TEXT_OVER_FULL_PAGE_IMAGE",
+            "ANNOTATION_MISSING_UNICODE",
+            "ANNOTATION_REPLACEMENT_CHARACTERS"
           ]
         },
         "description": { "type": "string" }

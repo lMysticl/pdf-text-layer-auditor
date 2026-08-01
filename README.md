@@ -248,9 +248,12 @@ These limits reduce accidental resource use but do not sandbox the PDF parser. P
 - Geometry uses glyph origins rather than complete rendered glyph outlines, so
   it does not prove full or partial visual visibility.
 - PDF text coordinates and Unicode mappings depend on the source file.
-- Annotations, widgets, and optional-content use are inventoried, but annotation
-  appearance text and optional-content visibility states are not yet evaluated;
-  their completeness flags therefore remain `false`.
+- Normal, rollover, and down annotation appearance streams are checked
+  separately from page text. Form values without a generated appearance stream
+  cannot be inferred from the field value alone.
+- OCG/OCMD visibility is evaluated for View, Print, and Export. A malformed,
+  cyclic, or unsupported visibility expression makes `optionalContent=false`
+  in the document completeness object instead of being guessed clean.
 - Password-protected PDFs are not supported.
 - Results are diagnostics, not PDF/UA or accessibility certification.
 

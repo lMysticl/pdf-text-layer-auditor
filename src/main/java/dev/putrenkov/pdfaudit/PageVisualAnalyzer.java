@@ -7,6 +7,9 @@ import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -16,17 +19,28 @@ import org.apache.pdfbox.contentstream.PDFGraphicsStreamEngine;
 import org.apache.pdfbox.contentstream.operator.Operator;
 import org.apache.pdfbox.contentstream.operator.OperatorName;
 import org.apache.pdfbox.cos.COSBase;
+import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.cos.COSStream;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.documentinterchange.markedcontent.PDPropertyList;
+import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImage;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentGroup;
+import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentMembershipDictionary;
+import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentProperties;
 import org.apache.pdfbox.pdmodel.graphics.state.RenderingMode;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceEntry;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
+import org.apache.pdfbox.rendering.RenderDestination;
 import org.apache.pdfbox.util.Matrix;
 import org.apache.pdfbox.util.Vector;
 
@@ -36,6 +50,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     private static final COSName OPTIONAL_CONTENT_MEMBERSHIP = COSName.getPDFName("OCMD");
 
     private final GeneralPath currentPath = new GeneralPath();
+    private final PDOptionalContentProperties optionalContentProperties;
     private int imageCount;
     private double maxImageCoverageRatio;
     private final Area combinedImageArea = new Area();
@@ -50,9 +65,25 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     private int duplicateOverlapGlyphCount;
     private int rotatedGlyphCount;
     private int verticalGlyphCount;
+    private boolean inAnnotationAppearance;
+    private int annotationAppearanceStreamCount;
+    private int annotationGlyphCount;
+    private int annotationUnicodeCharacterCount;
+    private int annotationMissingUnicodeGlyphCount;
+    private int annotationReplacementCharacterCount;
+    private int optionalContentReferenceCount;
+    private int optionalContentMembershipReferenceCount;
+    private int hiddenInViewReferenceCount;
+    private int hiddenInPrintReferenceCount;
+    private int hiddenInExportReferenceCount;
+    private int optionalContentEvaluationFailureCount;
 
-    private PageVisualAnalyzer(PDPage page) {
+    private PageVisualAnalyzer(
+            PDPage page,
+            PDOptionalContentProperties optionalContentProperties
+    ) {
         super(page);
+        this.optionalContentProperties = optionalContentProperties;
     }
 
     static Map<Integer, PageEvidence> analyze(
@@ -62,9 +93,15 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         Map<Integer, PageEvidence> results = new LinkedHashMap<>();
         for (int pageNumber : selectedPages) {
             PDPage page = document.getPage(pageNumber - 1);
-            PageVisualAnalyzer analyzer = new PageVisualAnalyzer(page);
+            PageVisualAnalyzer analyzer = new PageVisualAnalyzer(
+                    page,
+                    document.getDocumentCatalog().getOCProperties());
             analyzer.processPage(page);
             List<PDAnnotation> annotations = page.getAnnotations();
+            for (PDAnnotation annotation : annotations) {
+                analyzer.recordOptionalContent(annotation.getOptionalContent());
+                analyzer.processAnnotationAppearances(annotation);
+            }
             int widgetCount = (int) annotations.stream()
                     .filter(PDAnnotationWidget.class::isInstance)
                     .count();
@@ -89,7 +126,22 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
                             analyzer.transparentGlyphCount,
                             analyzer.duplicateOverlapGlyphCount,
                             analyzer.rotatedGlyphCount,
-                            analyzer.verticalGlyphCount)));
+                            analyzer.verticalGlyphCount),
+                    new AnnotationAppearanceAudit(
+                            true,
+                            analyzer.annotationAppearanceStreamCount,
+                            analyzer.annotationGlyphCount,
+                            analyzer.annotationUnicodeCharacterCount,
+                            analyzer.annotationMissingUnicodeGlyphCount,
+                            analyzer.annotationReplacementCharacterCount),
+                    new OptionalContentAudit(
+                            analyzer.optionalContentEvaluationFailureCount == 0,
+                            analyzer.optionalContentReferenceCount,
+                            analyzer.optionalContentMembershipReferenceCount,
+                            analyzer.hiddenInViewReferenceCount,
+                            analyzer.hiddenInPrintReferenceCount,
+                            analyzer.hiddenInExportReferenceCount,
+                            analyzer.optionalContentEvaluationFailureCount)));
         }
         return results;
     }
@@ -150,6 +202,20 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         if (!glyphLocations.add(location)) {
             duplicateOverlapGlyphCount++;
         }
+        if (inAnnotationAppearance) {
+            annotationGlyphCount++;
+            String unicode = annotationUnicode(font, code);
+            if (!PdfTextLayerAuditor.isUsableUnicode(unicode)) {
+                annotationMissingUnicodeGlyphCount++;
+            }
+            if (unicode != null) {
+                annotationUnicodeCharacterCount +=
+                        unicode.codePointCount(0, unicode.length());
+                annotationReplacementCharacterCount += (int) unicode.codePoints()
+                        .filter(codePoint -> codePoint == 0xFFFD)
+                        .count();
+            }
+        }
         super.showGlyph(textRenderingMatrix, font, code, displacement);
     }
 
@@ -171,6 +237,9 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     public void beginMarkedContentSequence(COSName tag, COSDictionary properties) {
         if (OPTIONAL_CONTENT.equals(tag) || isOptionalContent(properties)) {
             optionalContentPresent = true;
+            recordOptionalContent(properties == null
+                    ? null
+                    : PDPropertyList.create(properties));
         }
         super.beginMarkedContentSequence(tag, properties);
     }
@@ -181,6 +250,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         if (image instanceof PDImageXObject imageXObject
                 && imageXObject.getOptionalContent() != null) {
             optionalContentPresent = true;
+            recordOptionalContent(imageXObject.getOptionalContent());
         }
 
         Area paintedArea = new Area(getGraphicsState()
@@ -205,6 +275,15 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
                 maxImageCoverageRatio,
                 Math.max(0, Math.min(1, coverage)));
         combinedImageArea.add(paintedArea);
+    }
+
+    @Override
+    public void showForm(PDFormXObject form) throws IOException {
+        if (form.getOptionalContent() != null) {
+            optionalContentPresent = true;
+            recordOptionalContent(form.getOptionalContent());
+        }
+        super.showForm(form);
     }
 
     @Override
@@ -307,6 +386,197 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         };
     }
 
+    private void processAnnotationAppearances(PDAnnotation annotation) throws IOException {
+        Map<COSStream, PDAppearanceStream> streams = new IdentityHashMap<>();
+        PDAppearanceDictionary appearance = annotation.getAppearance();
+        if (appearance != null) {
+            addAppearanceEntry(streams, appearance.getNormalAppearance());
+            addAppearanceEntry(streams, appearance.getRolloverAppearance());
+            addAppearanceEntry(streams, appearance.getDownAppearance());
+        }
+        for (PDAppearanceStream stream : streams.values()) {
+            annotationAppearanceStreamCount++;
+            inAnnotationAppearance = true;
+            try {
+                processAnnotation(annotation, stream);
+            } finally {
+                inAnnotationAppearance = false;
+            }
+        }
+    }
+
+    private static void addAppearanceEntry(
+            Map<COSStream, PDAppearanceStream> streams,
+            PDAppearanceEntry entry
+    ) {
+        if (entry == null) {
+            return;
+        }
+        if (entry.isStream()) {
+            PDAppearanceStream stream = entry.getAppearanceStream();
+            streams.put(stream.getCOSObject(), stream);
+        } else if (entry.isSubDictionary()) {
+            for (PDAppearanceStream stream : entry.getSubDictionary().values()) {
+                streams.put(stream.getCOSObject(), stream);
+            }
+        }
+    }
+
+    private static String annotationUnicode(PDFont font, int code) {
+        if (font == null) {
+            return null;
+        }
+        try {
+            return font.toUnicode(code);
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
+    private void recordOptionalContent(PDPropertyList propertyList) {
+        if (propertyList == null) {
+            optionalContentEvaluationFailureCount += 3;
+            return;
+        }
+        optionalContentReferenceCount++;
+        if (propertyList instanceof PDOptionalContentMembershipDictionary) {
+            optionalContentMembershipReferenceCount++;
+        }
+        Boolean hiddenView = isHidden(propertyList, RenderDestination.VIEW, 0,
+                identitySet());
+        Boolean hiddenPrint = isHidden(propertyList, RenderDestination.PRINT, 0,
+                identitySet());
+        Boolean hiddenExport = isHidden(propertyList, RenderDestination.EXPORT, 0,
+                identitySet());
+        hiddenInViewReferenceCount += recordVisibility(hiddenView);
+        hiddenInPrintReferenceCount += recordVisibility(hiddenPrint);
+        hiddenInExportReferenceCount += recordVisibility(hiddenExport);
+    }
+
+    private int recordVisibility(Boolean hidden) {
+        if (hidden == null) {
+            optionalContentEvaluationFailureCount++;
+            return 0;
+        }
+        return hidden ? 1 : 0;
+    }
+
+    private Boolean isHidden(
+            PDPropertyList propertyList,
+            RenderDestination destination,
+            int depth,
+            Set<COSBase> visiting
+    ) {
+        if (depth > 64 || !visiting.add(propertyList.getCOSObject())) {
+            return null;
+        }
+        try {
+            if (propertyList instanceof PDOptionalContentGroup group) {
+                PDOptionalContentGroup.RenderState state = group.getRenderState(destination);
+                if (state != null) {
+                    return state == PDOptionalContentGroup.RenderState.OFF;
+                }
+                return optionalContentProperties != null
+                        && !optionalContentProperties.isGroupEnabled(group);
+            }
+            if (propertyList instanceof PDOptionalContentMembershipDictionary membership) {
+                return isMembershipHidden(membership, destination, depth + 1, visiting);
+            }
+            return false;
+        } catch (RuntimeException exception) {
+            return null;
+        } finally {
+            visiting.remove(propertyList.getCOSObject());
+        }
+    }
+
+    private Boolean isMembershipHidden(
+            PDOptionalContentMembershipDictionary membership,
+            RenderDestination destination,
+            int depth,
+            Set<COSBase> visiting
+    ) {
+        COSArray expression = membership.getCOSObject().getCOSArray(COSName.VE);
+        if (expression != null && expression.size() > 0) {
+            return isExpressionHidden(expression, destination, depth, visiting);
+        }
+        List<PDPropertyList> groups = membership.getOCGs();
+        if (groups.isEmpty()) {
+            return false;
+        }
+        List<Boolean> visible = new ArrayList<>(groups.size());
+        for (PDPropertyList group : groups) {
+            Boolean hidden = isHidden(group, destination, depth, visiting);
+            if (hidden == null) {
+                return null;
+            }
+            visible.add(!hidden);
+        }
+        COSName policy = membership.getVisibilityPolicy();
+        if (COSName.ANY_OFF.equals(policy)) {
+            return visible.stream().allMatch(Boolean::booleanValue);
+        }
+        if (COSName.ALL_ON.equals(policy)) {
+            return visible.stream().anyMatch(value -> !value);
+        }
+        if (COSName.ALL_OFF.equals(policy)) {
+            return visible.stream().anyMatch(Boolean::booleanValue);
+        }
+        return visible.stream().noneMatch(Boolean::booleanValue);
+    }
+
+    private Boolean isExpressionHidden(
+            COSArray expression,
+            RenderDestination destination,
+            int depth,
+            Set<COSBase> visiting
+    ) {
+        if (depth > 64 || !visiting.add(expression)) {
+            return null;
+        }
+        try {
+            if (expression.size() == 0) {
+                return false;
+            }
+            String operator = expression.getName(0);
+            if (operator == null || expression.size() < 2) {
+                return null;
+            }
+            List<Boolean> hidden = new ArrayList<>();
+            for (int index = 1; index < expression.size(); index++) {
+                COSBase operand = expression.getObject(index);
+                Boolean value;
+                if (operand instanceof COSArray nested) {
+                    value = isExpressionHidden(nested, destination, depth + 1, visiting);
+                } else if (operand instanceof COSDictionary dictionary) {
+                    value = isHidden(
+                            PDPropertyList.create(dictionary),
+                            destination,
+                            depth + 1,
+                            visiting);
+                } else {
+                    return null;
+                }
+                if (value == null) {
+                    return null;
+                }
+                hidden.add(value);
+            }
+            return switch (operator) {
+                case "And" -> hidden.stream().anyMatch(Boolean::booleanValue);
+                case "Or" -> hidden.stream().allMatch(Boolean::booleanValue);
+                case "Not" -> hidden.size() == 1 ? !hidden.getFirst() : null;
+                default -> null;
+            };
+        } finally {
+            visiting.remove(expression);
+        }
+    }
+
+    private static Set<COSBase> identitySet() {
+        return Collections.newSetFromMap(new IdentityHashMap<>());
+    }
+
     private static double area(Area area) {
         FlatteningPathIterator iterator = new FlatteningPathIterator(
                 area.getPathIterator(null), 0.25);
@@ -354,7 +624,9 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
 
     record PageEvidence(
             VisualContentAudit visualContent,
-            GeometryVisibilityAudit geometryVisibility
+            GeometryVisibilityAudit geometryVisibility,
+            AnnotationAppearanceAudit annotationAppearances,
+            OptionalContentAudit optionalContent
     ) {
     }
 
