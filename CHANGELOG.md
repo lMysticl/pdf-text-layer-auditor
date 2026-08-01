@@ -23,6 +23,9 @@
   selector, ZWJ, and bidi-control counts from semantic page text.
 - Expose bounded font subtype, encoding, vertical-writing, embedding, subset,
   `/ToUnicode`, and per-font raw-unmapped evidence.
+- Stop adversarial or accidentally pathological documents at explicit glyph,
+  semantic-character, font, image, path, annotation, appearance-stream, and
+  optional-content work budgets, with a stable machine-readable failure marker.
 - Flag near-full-page combined image coverage with at most 32 extracted characters as a sparse
   OCR candidate while retaining visibility observations as non-failing evidence
   until corpus calibration proves safe decision thresholds.

@@ -51,6 +51,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
 
     private final GeneralPath currentPath = new GeneralPath();
     private final PDOptionalContentProperties optionalContentProperties;
+    private final AuditWorkLimits workLimits;
     private int imageCount;
     private double maxImageCoverageRatio;
     private final Area combinedImageArea = new Area();
@@ -80,24 +81,33 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
 
     private PageVisualAnalyzer(
             PDPage page,
-            PDOptionalContentProperties optionalContentProperties
+            PDOptionalContentProperties optionalContentProperties,
+            AuditWorkLimits workLimits
     ) {
         super(page);
         this.optionalContentProperties = optionalContentProperties;
+        this.workLimits = workLimits;
     }
 
     static Map<Integer, PageEvidence> analyze(
             PDDocument document,
-            List<Integer> selectedPages
+            List<Integer> selectedPages,
+            AuditWorkLimits workLimits
     ) throws IOException {
         Map<Integer, PageEvidence> results = new LinkedHashMap<>();
         for (int pageNumber : selectedPages) {
             PDPage page = document.getPage(pageNumber - 1);
             PageVisualAnalyzer analyzer = new PageVisualAnalyzer(
                     page,
-                    document.getDocumentCatalog().getOCProperties());
+                    document.getDocumentCatalog().getOCProperties(),
+                    workLimits);
             analyzer.processPage(page);
             List<PDAnnotation> annotations = page.getAnnotations();
+            if (annotations.size() > workLimits.maximumAnnotationCount()) {
+                throw new AuditWorkLimitException(
+                        AuditWorkLimitException.Code.ANNOTATION_COUNT,
+                        workLimits.maximumAnnotationCount());
+            }
             for (PDAnnotation annotation : annotations) {
                 analyzer.recordOptionalContent(annotation.getOptionalContent());
                 analyzer.processAnnotationAppearances(annotation);
@@ -247,6 +257,11 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     @Override
     public void drawImage(PDImage image) {
         imageCount++;
+        if (imageCount > workLimits.maximumImageCount()) {
+            throw new AuditWorkLimitException(
+                    AuditWorkLimitException.Code.IMAGE_COUNT,
+                    workLimits.maximumImageCount());
+        }
         if (image instanceof PDImageXObject imageXObject
                 && imageXObject.getOptionalContent() != null) {
             optionalContentPresent = true;
@@ -357,12 +372,12 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
 
     @Override
     public void shadingFill(COSName shadingName) {
-        paintedVectorPathCount++;
+        recordPaintedVectorOperation();
     }
 
     private void recordPaintedPath() {
         if (!currentPath.getPathIterator(null).isDone()) {
-            paintedVectorPathCount++;
+            recordPaintedVectorOperation();
         }
         currentPath.reset();
     }
@@ -396,6 +411,12 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         }
         for (PDAppearanceStream stream : streams.values()) {
             annotationAppearanceStreamCount++;
+            if (annotationAppearanceStreamCount
+                    > workLimits.maximumAnnotationAppearanceStreamCount()) {
+                throw new AuditWorkLimitException(
+                        AuditWorkLimitException.Code.ANNOTATION_APPEARANCE_STREAM_COUNT,
+                        workLimits.maximumAnnotationAppearanceStreamCount());
+            }
             inAnnotationAppearance = true;
             try {
                 processAnnotation(annotation, stream);
@@ -439,6 +460,12 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
             return;
         }
         optionalContentReferenceCount++;
+        if (optionalContentReferenceCount
+                > workLimits.maximumOptionalContentReferenceCount()) {
+            throw new AuditWorkLimitException(
+                    AuditWorkLimitException.Code.OPTIONAL_CONTENT_REFERENCE_COUNT,
+                    workLimits.maximumOptionalContentReferenceCount());
+        }
         if (propertyList instanceof PDOptionalContentMembershipDictionary) {
             optionalContentMembershipReferenceCount++;
         }
@@ -575,6 +602,15 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
 
     private static Set<COSBase> identitySet() {
         return Collections.newSetFromMap(new IdentityHashMap<>());
+    }
+
+    private void recordPaintedVectorOperation() {
+        paintedVectorPathCount++;
+        if (paintedVectorPathCount > workLimits.maximumPaintedVectorPathCount()) {
+            throw new AuditWorkLimitException(
+                    AuditWorkLimitException.Code.PAINTED_VECTOR_PATH_COUNT,
+                    workLimits.maximumPaintedVectorPathCount());
+        }
     }
 
     private static double area(Area area) {

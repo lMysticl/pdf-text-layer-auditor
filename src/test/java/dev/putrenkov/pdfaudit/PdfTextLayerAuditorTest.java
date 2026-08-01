@@ -542,6 +542,148 @@ class PdfTextLayerAuditorTest {
     }
 
     @Test
+    void enforcesGlyphSemanticCharacterAndFontBudgets() throws IOException {
+        Path glyphs = temporaryDirectory.resolve("too-many-glyphs.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            addHelveticaText(document, page, "AB", 72, 720);
+            document.save(glyphs.toFile());
+        }
+        assertWorkLimit(
+                glyphs,
+                new AuditWorkLimits(1, 100, 10, 10, 10, 10, 10, 10),
+                AuditWorkLimitException.Code.GLYPH_COUNT);
+
+        Path characters = temporaryDirectory.resolve("too-many-semantic-characters.pdf");
+        try (PDDocument document = new PDDocument()) {
+            addActualTextPage(
+                    document,
+                    createUnmappedType3Font(document),
+                    utf16Hex("abc"));
+            document.save(characters.toFile());
+        }
+        assertWorkLimit(
+                characters,
+                new AuditWorkLimits(10, 2, 10, 10, 10, 10, 10, 10),
+                AuditWorkLimitException.Code.SEMANTIC_CHARACTER_COUNT);
+
+        Path fonts = temporaryDirectory.resolve("too-many-fonts.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                content.showText("A");
+                content.setFont(new PDType1Font(Standard14Fonts.FontName.TIMES_ROMAN), 12);
+                content.showText("B");
+                content.endText();
+            }
+            document.save(fonts.toFile());
+        }
+        assertWorkLimit(
+                fonts,
+                new AuditWorkLimits(10, 10, 1, 10, 10, 10, 10, 10),
+                AuditWorkLimitException.Code.FONT_COUNT);
+    }
+
+    @Test
+    void enforcesImagePathAnnotationAppearanceAndOptionalContentBudgets()
+            throws IOException {
+        BufferedImage pixel = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+        Path images = temporaryDirectory.resolve("too-many-images.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            var image = LosslessFactory.createFromImage(document, pixel);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.drawImage(image, 0, 0, 10, 10);
+                content.drawImage(image, 20, 20, 10, 10);
+            }
+            document.save(images.toFile());
+        }
+        assertWorkLimit(
+                images,
+                new AuditWorkLimits(10, 10, 10, 1, 10, 10, 10, 10),
+                AuditWorkLimitException.Code.IMAGE_COUNT);
+
+        Path paths = temporaryDirectory.resolve("too-many-paths.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.addRect(0, 0, 10, 10);
+                content.fill();
+                content.addRect(20, 20, 10, 10);
+                content.fill();
+            }
+            document.save(paths.toFile());
+        }
+        assertWorkLimit(
+                paths,
+                new AuditWorkLimits(10, 10, 10, 10, 1, 10, 10, 10),
+                AuditWorkLimitException.Code.PAINTED_VECTOR_PATH_COUNT);
+
+        Path annotations = temporaryDirectory.resolve("too-many-annotations.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            page.setAnnotations(List.of(new PDAnnotationWidget(), new PDAnnotationWidget()));
+            document.save(annotations.toFile());
+        }
+        assertWorkLimit(
+                annotations,
+                new AuditWorkLimits(10, 10, 10, 10, 10, 1, 10, 10),
+                AuditWorkLimitException.Code.ANNOTATION_COUNT);
+
+        Path appearances = temporaryDirectory.resolve("too-many-appearances.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            PDAppearanceDictionary dictionary = new PDAppearanceDictionary();
+            dictionary.setNormalAppearance(createAppearance(
+                    document,
+                    new PDType1Font(Standard14Fonts.FontName.HELVETICA),
+                    "A"));
+            dictionary.setRolloverAppearance(createAppearance(
+                    document,
+                    new PDType1Font(Standard14Fonts.FontName.HELVETICA),
+                    "B"));
+            PDAnnotationWidget widget = new PDAnnotationWidget();
+            widget.setRectangle(new PDRectangle(0, 0, 100, 20));
+            widget.setAppearance(dictionary);
+            page.setAnnotations(List.of(widget));
+            document.save(appearances.toFile());
+        }
+        assertWorkLimit(
+                appearances,
+                new AuditWorkLimits(10, 10, 10, 10, 10, 10, 1, 10),
+                AuditWorkLimitException.Code.ANNOTATION_APPEARANCE_STREAM_COUNT);
+
+        Path optional = temporaryDirectory.resolve("too-many-optional-refs.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDOptionalContentGroup group = new PDOptionalContentGroup("layer");
+            PDOptionalContentProperties properties = new PDOptionalContentProperties();
+            properties.addGroup(group);
+            document.getDocumentCatalog().setOCProperties(properties);
+            PDPage page = new PDPage();
+            document.addPage(page);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                for (int index = 0; index < 2; index++) {
+                    content.beginMarkedContent(COSName.OC, group);
+                    content.endMarkedContent();
+                }
+            }
+            document.save(optional.toFile());
+        }
+        assertWorkLimit(
+                optional,
+                new AuditWorkLimits(10, 10, 10, 10, 10, 10, 10, 1),
+                AuditWorkLimitException.Code.OPTIONAL_CONTENT_REFERENCE_COUNT);
+    }
+
+    @Test
     void treatsActualTextAsSemanticEvidenceWithoutHidingRawMappingProvenance()
             throws IOException {
         Path pdf = temporaryDirectory.resolve("actual-text.pdf");
@@ -1019,6 +1161,22 @@ class PdfTextLayerAuditorTest {
         characterProcedures.setItem(COSName.getPDFName("A"), characterStream);
         dictionary.setItem(COSName.CHAR_PROCS, characterProcedures);
         return new PDType3Font(dictionary);
+    }
+
+    private static void assertWorkLimit(
+            Path pdf,
+            AuditWorkLimits limits,
+            AuditWorkLimitException.Code expectedCode
+    ) {
+        AuditWorkLimitException exception = assertThrows(
+                AuditWorkLimitException.class,
+                () -> new PdfTextLayerAuditor(
+                        100 * 1024 * 1024L,
+                        100,
+                        PdfTextLayerAuditor.DEFAULT_TINY_TEXT_THRESHOLD_POINTS,
+                        limits).audit(pdf));
+        assertEquals(expectedCode, exception.code());
+        assertTrue(exception.getMessage().contains("configured"));
     }
 
     private static String utf16Hex(String text) {
