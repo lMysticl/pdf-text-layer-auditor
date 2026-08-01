@@ -72,6 +72,10 @@ public final class Main {
             err.println("pdfTextLayerAuditorFailure=WORK_LIMIT_" + exception.code());
             err.println(TerminalText.escape(exception.getMessage()));
             return 2;
+        } catch (OutOfMemoryError error) {
+            return resourceLimit(err, "HEAP");
+        } catch (StackOverflowError error) {
+            return resourceLimit(err, "STACK");
         } catch (IllegalArgumentException | SecurityException exception) {
             err.println(TerminalText.escape(exception.getMessage()));
             return 2;
@@ -84,6 +88,11 @@ public final class Main {
                     "Could not audit PDF: " + TerminalText.escape(exception.getMessage()));
             return 2;
         }
+    }
+
+    static int resourceLimit(PrintStream err, String resource) {
+        err.println("pdfTextLayerAuditorFailure=WORK_LIMIT_" + resource);
+        return 2;
     }
 
     private static int completeOutput(PrintStream out, PrintStream err, int successCode) {

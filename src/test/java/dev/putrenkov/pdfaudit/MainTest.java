@@ -181,6 +181,22 @@ class MainTest {
     }
 
     @Test
+    void jvmResourceFailuresHaveStableMachineReadableMarkers() {
+        ByteArrayOutputStream capturedError = new ByteArrayOutputStream();
+        try (PrintStream error =
+                new PrintStream(capturedError, true, StandardCharsets.UTF_8)) {
+            assertEquals(2, Main.resourceLimit(error, "HEAP"));
+            assertEquals(2, Main.resourceLimit(error, "STACK"));
+        }
+
+        assertEquals(
+                "pdfTextLayerAuditorFailure=WORK_LIMIT_HEAP"
+                        + System.lineSeparator()
+                        + "pdfTextLayerAuditorFailure=WORK_LIMIT_STACK",
+                capturedError.toString(StandardCharsets.UTF_8).trim());
+    }
+
+    @Test
     void textReportOutputFailureReturnsExitCodeTwoAndUsesStderr() throws IOException {
         Path pdf = createBlankPdf("failed-text-output.pdf");
         ByteArrayOutputStream capturedError = new ByteArrayOutputStream();
