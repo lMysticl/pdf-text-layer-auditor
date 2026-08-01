@@ -204,6 +204,18 @@ public final class JsonReportPrinter {
                 visual.combinedImageCoverageRatio());
         appendNullableNumberProperty(
                 json,
+                "imageOccupiedGridCellCount",
+                visual.imageOccupiedGridCellCount());
+        appendNullableNumberProperty(
+                json,
+                "imageTextOverlapGridCellCount",
+                visual.imageTextOverlapGridCellCount());
+        appendNullableDecimalProperty(
+                json,
+                "imageTextOverlapRatio",
+                visual.imageTextOverlapRatio());
+        appendNullableNumberProperty(
+                json,
                 "paintedVectorPathCount",
                 visual.paintedVectorPathCount());
         appendNullableNumberProperty(json, "annotationCount", visual.annotationCount());

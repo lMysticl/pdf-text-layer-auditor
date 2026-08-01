@@ -5,6 +5,9 @@ public record VisualContentAudit(
         Integer imageCount,
         Double maxImageCoverageRatio,
         Double combinedImageCoverageRatio,
+        Integer imageOccupiedGridCellCount,
+        Integer imageTextOverlapGridCellCount,
+        Double imageTextOverlapRatio,
         Integer paintedVectorPathCount,
         Integer annotationCount,
         Integer widgetAnnotationCount,
@@ -31,6 +34,17 @@ public record VisualContentAudit(
                 throw new IllegalArgumentException(
                         "Combined image coverage ratio is invalid");
             }
+            requireNonNegative(imageOccupiedGridCellCount);
+            requireNonNegative(imageTextOverlapGridCellCount);
+            if (imageOccupiedGridCellCount > 64
+                    || imageTextOverlapGridCellCount > imageOccupiedGridCellCount
+                    || imageTextOverlapRatio == null
+                    || !Double.isFinite(imageTextOverlapRatio)
+                    || imageTextOverlapRatio < 0
+                    || imageTextOverlapRatio > 1) {
+                throw new IllegalArgumentException(
+                        "Image/text spatial coverage is invalid");
+            }
             if (optionalContentPresent == null) {
                 throw new IllegalArgumentException(
                         "Assessed visual content must declare optional-content presence");
@@ -38,6 +52,9 @@ public record VisualContentAudit(
         } else if (imageCount != null
                 || maxImageCoverageRatio != null
                 || combinedImageCoverageRatio != null
+                || imageOccupiedGridCellCount != null
+                || imageTextOverlapGridCellCount != null
+                || imageTextOverlapRatio != null
                 || paintedVectorPathCount != null
                 || annotationCount != null
                 || widgetAnnotationCount != null
@@ -49,7 +66,7 @@ public record VisualContentAudit(
 
     public static VisualContentAudit unassessed() {
         return new VisualContentAudit(
-                false, null, null, null, null, null, null, null);
+                false, null, null, null, null, null, null, null, null, null, null);
     }
 
     private static void requireNonNegative(Integer value) {

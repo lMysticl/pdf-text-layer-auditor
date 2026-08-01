@@ -45,6 +45,7 @@ import org.apache.pdfbox.util.Matrix;
 import org.apache.pdfbox.util.Vector;
 
 final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
+    private static final int SPATIAL_GRID_SIZE = 8;
     private static final COSName OPTIONAL_CONTENT = COSName.getPDFName("OC");
     private static final COSName OPTIONAL_CONTENT_GROUP = COSName.getPDFName("OCG");
     private static final COSName OPTIONAL_CONTENT_MEMBERSHIP = COSName.getPDFName("OCMD");
@@ -55,6 +56,8 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     private int imageCount;
     private double maxImageCoverageRatio;
     private final Area combinedImageArea = new Area();
+    private final Set<Integer> imageGridCells = new HashSet<>();
+    private final Set<Integer> visibleTextGridCells = new HashSet<>();
     private int paintedVectorPathCount;
     private boolean optionalContentPresent;
     private final Set<GlyphLocation> glyphLocations = new HashSet<>();
@@ -117,12 +120,16 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
                     .count();
             boolean annotationOptionalContent = annotations.stream()
                     .anyMatch(annotation -> annotation.getOptionalContent() != null);
+            GridCoverage gridCoverage = analyzer.gridCoverage();
             results.put(pageNumber, new PageEvidence(
                     new VisualContentAudit(
                             true,
                             analyzer.imageCount,
                             analyzer.maxImageCoverageRatio,
                             analyzer.combinedImageCoverageRatio(),
+                            gridCoverage.imageCellCount(),
+                            gridCoverage.imageTextOverlapCellCount(),
+                            gridCoverage.imageTextOverlapRatio(),
                             analyzer.paintedVectorPathCount,
                             annotations.size(),
                             widgetCount,
@@ -194,6 +201,9 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         }
         if (!invisible && !transparent && !offPage && !clipped) {
             visibleGlyphCount++;
+            if (!inAnnotationAppearance) {
+                recordVisibleTextGridCell(x, y);
+            }
         }
         double angle = Math.atan2(
                 textRenderingMatrix.getShearY(),
@@ -290,6 +300,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
                 maxImageCoverageRatio,
                 Math.max(0, Math.min(1, coverage)));
         combinedImageArea.add(paintedArea);
+        recordImageGridCells(paintedArea);
     }
 
     @Override
@@ -658,6 +669,53 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         return Math.max(0, Math.min(1, area(combinedImageArea) / pageAreaValue));
     }
 
+    private void recordImageGridCells(Area paintedArea) {
+        PDRectangle crop = getPage().getCropBox();
+        if (crop.getWidth() <= 0 || crop.getHeight() <= 0) {
+            return;
+        }
+        double cellWidth = crop.getWidth() / SPATIAL_GRID_SIZE;
+        double cellHeight = crop.getHeight() / SPATIAL_GRID_SIZE;
+        for (int row = 0; row < SPATIAL_GRID_SIZE; row++) {
+            for (int column = 0; column < SPATIAL_GRID_SIZE; column++) {
+                Rectangle2D cell = new Rectangle2D.Double(
+                        crop.getLowerLeftX() + column * cellWidth,
+                        crop.getLowerLeftY() + row * cellHeight,
+                        cellWidth,
+                        cellHeight);
+                if (paintedArea.intersects(cell)) {
+                    imageGridCells.add(row * SPATIAL_GRID_SIZE + column);
+                }
+            }
+        }
+    }
+
+    private void recordVisibleTextGridCell(double x, double y) {
+        PDRectangle crop = getPage().getCropBox();
+        if (crop.getWidth() <= 0 || crop.getHeight() <= 0) {
+            return;
+        }
+        int column = Math.min(
+                SPATIAL_GRID_SIZE - 1,
+                (int) ((x - crop.getLowerLeftX()) / crop.getWidth() * SPATIAL_GRID_SIZE));
+        int row = Math.min(
+                SPATIAL_GRID_SIZE - 1,
+                (int) ((y - crop.getLowerLeftY()) / crop.getHeight() * SPATIAL_GRID_SIZE));
+        if (column >= 0 && row >= 0) {
+            visibleTextGridCells.add(row * SPATIAL_GRID_SIZE + column);
+        }
+    }
+
+    private GridCoverage gridCoverage() {
+        int overlap = (int) imageGridCells.stream()
+                .filter(visibleTextGridCells::contains)
+                .count();
+        double ratio = imageGridCells.isEmpty()
+                ? 0
+                : (double) overlap / imageGridCells.size();
+        return new GridCoverage(imageGridCells.size(), overlap, ratio);
+    }
+
     record PageEvidence(
             VisualContentAudit visualContent,
             GeometryVisibilityAudit geometryVisibility,
@@ -667,5 +725,12 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     }
 
     private record GlyphLocation(long x, long y, int code, String fontName) {
+    }
+
+    private record GridCoverage(
+            int imageCellCount,
+            int imageTextOverlapCellCount,
+            double imageTextOverlapRatio
+    ) {
     }
 }

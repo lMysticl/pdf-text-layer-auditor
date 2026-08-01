@@ -7,5 +7,6 @@ public enum PageClassification {
     IMAGE_ONLY,
     NATIVE_TEXT,
     MIXED,
-    SPARSE_OCR
+    SPARSE_OCR,
+    PARTIAL_OCR
 }
