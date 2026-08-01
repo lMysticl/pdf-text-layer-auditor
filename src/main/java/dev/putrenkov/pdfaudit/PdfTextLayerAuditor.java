@@ -400,6 +400,13 @@ public final class PdfTextLayerAuditor {
         private int rawUnmappedGlyphCount;
         private int actualTextResolvedGlyphCount;
         private int malformedToUnicodeFontCount;
+        private final Set<String> unicodeScripts = new java.util.TreeSet<>();
+        private int rightToLeftCharacterCount;
+        private int combiningMarkCount;
+        private int nonBmpCharacterCount;
+        private int variationSelectorCount;
+        private int zeroWidthJoinerCount;
+        private int bidiControlCount;
 
         private MutablePage(int pageNumber, float tinyTextThresholdPoints) {
             this.pageNumber = pageNumber;
@@ -446,6 +453,7 @@ public final class PdfTextLayerAuditor {
                 replacementCharacterCount += (int) unicode.codePoints()
                         .filter(codePoint -> codePoint == 0xFFFD)
                         .count();
+                unicode.codePoints().forEach(this::acceptUnicodeCodePoint);
             }
 
             if (tinyTextThresholdPoints > 0
@@ -457,14 +465,33 @@ public final class PdfTextLayerAuditor {
             String fontName = mappingUntrusted ? "<malformed-font>" : displayName(font);
             boolean embedded = !mappingUntrusted && font != null && font.isEmbedded();
             boolean damaged = mappingUntrusted || font != null && font.isDamaged();
-            FontKey key = new FontKey(fontName, embedded, damaged);
+            FontDescriptor descriptor = mappingUntrusted
+                    ? FontDescriptor.malformed()
+                    : describeFont(font);
+            FontKey key = new FontKey(
+                    fontName,
+                    descriptor.subtype(),
+                    descriptor.encoding(),
+                    embedded,
+                    damaged,
+                    descriptor.vertical(),
+                    descriptor.toUnicodePresent(),
+                    descriptor.subset());
             MutableFont fontAudit = fonts.computeIfAbsent(
                     key,
                     ignored -> new MutableFont(
                             fontName,
+                            descriptor.subtype(),
+                            descriptor.encoding(),
                             embedded,
-                            damaged));
+                            damaged,
+                            descriptor.vertical(),
+                            descriptor.toUnicodePresent(),
+                            descriptor.subset()));
             fontAudit.glyphCount++;
+            if (rawMappingMissing) {
+                fontAudit.rawUnmappedGlyphCount++;
+            }
         }
 
         private void inspectFont(PDFont font) {
@@ -531,7 +558,7 @@ public final class PdfTextLayerAuditor {
                 return "<unknown>";
             }
             String name = font.getName();
-            return name == null || name.isBlank() ? "<unnamed>" : name;
+            return boundedName(name, "<unnamed>");
         }
 
         private PageAudit freeze(
@@ -585,8 +612,13 @@ public final class PdfTextLayerAuditor {
             List<FontAudit> fontAudits = fonts.values().stream()
                     .map(MutableFont::freeze)
                     .sorted(Comparator.comparing(FontAudit::name)
+                            .thenComparing(FontAudit::subtype)
+                            .thenComparing(FontAudit::encoding)
                             .thenComparing(FontAudit::embedded)
-                            .thenComparing(FontAudit::damaged))
+                            .thenComparing(FontAudit::damaged)
+                            .thenComparing(FontAudit::vertical)
+                            .thenComparing(FontAudit::toUnicodePresent)
+                            .thenComparing(FontAudit::subset))
                     .toList();
 
             return new PageAudit(
@@ -616,8 +648,66 @@ public final class PdfTextLayerAuditor {
                     visualContent,
                     annotationAppearances,
                     visualEvidence.optionalContent(),
+                    new UnicodeProfileAudit(
+                            List.copyOf(unicodeScripts),
+                            rightToLeftCharacterCount,
+                            combiningMarkCount,
+                            nonBmpCharacterCount,
+                            variationSelectorCount,
+                            zeroWidthJoinerCount,
+                            bidiControlCount),
                     fontAudits,
                     findings);
+        }
+
+        private static FontDescriptor describeFont(PDFont font) {
+            if (font == null) {
+                return new FontDescriptor(
+                        "<unknown>", "<implicit>", false, false, false);
+            }
+            COSDictionary dictionary = font.getCOSObject();
+            String subtype = boundedName(dictionary.getNameAsString(COSName.SUBTYPE), "<unknown>");
+            String encoding = describeEncoding(dictionary.getDictionaryObject(COSName.ENCODING));
+            String name = font.getName();
+            boolean subset = name != null && name.matches("^[A-Z]{6}\\+.+");
+            return new FontDescriptor(
+                    subtype,
+                    encoding,
+                    font.isVertical(),
+                    dictionary.containsKey(COSName.TO_UNICODE),
+                    subset);
+        }
+
+        private static String describeEncoding(COSBase encoding) {
+            if (encoding == null) {
+                return "<implicit>";
+            }
+            if (encoding instanceof COSName name) {
+                return boundedName(name.getName(), "<unnamed>");
+            }
+            if (encoding instanceof COSStream stream) {
+                return boundedName(
+                        stream.getNameAsString(COSName.getPDFName("CMapName")),
+                        "<stream>");
+            }
+            if (encoding instanceof COSDictionary dictionary) {
+                return boundedName(
+                        dictionary.getNameAsString(COSName.BASE_ENCODING),
+                        "<dictionary>");
+            }
+            return "<other>";
+        }
+
+        private static String boundedName(String value, String fallback) {
+            if (value == null || value.isBlank()) {
+                return fallback;
+            }
+            StringBuilder safe = new StringBuilder(Math.min(value.length(), 128));
+            value.codePoints()
+                    .filter(codePoint -> !Character.isISOControl(codePoint))
+                    .limit(128)
+                    .forEach(safe::appendCodePoint);
+            return safe.isEmpty() ? fallback : safe.toString();
         }
 
         private PageClassification classify(VisualContentAudit visualContent) {
@@ -640,6 +730,47 @@ public final class PdfTextLayerAuditor {
                 return PageClassification.SPARSE_OCR;
             }
             return PageClassification.MIXED;
+        }
+
+        private void acceptUnicodeCodePoint(int codePoint) {
+            Character.UnicodeScript script = Character.UnicodeScript.of(codePoint);
+            if (script != Character.UnicodeScript.COMMON
+                    && script != Character.UnicodeScript.INHERITED
+                    && script != Character.UnicodeScript.UNKNOWN) {
+                unicodeScripts.add(script.name());
+            }
+            byte directionality = Character.getDirectionality(codePoint);
+            if (directionality == Character.DIRECTIONALITY_RIGHT_TO_LEFT
+                    || directionality == Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC) {
+                rightToLeftCharacterCount++;
+            }
+            int type = Character.getType(codePoint);
+            if (type == Character.NON_SPACING_MARK
+                    || type == Character.COMBINING_SPACING_MARK
+                    || type == Character.ENCLOSING_MARK) {
+                combiningMarkCount++;
+            }
+            if (codePoint > Character.MAX_VALUE) {
+                nonBmpCharacterCount++;
+            }
+            if (codePoint >= 0xFE00 && codePoint <= 0xFE0F
+                    || codePoint >= 0xE0100 && codePoint <= 0xE01EF) {
+                variationSelectorCount++;
+            }
+            if (codePoint == 0x200D) {
+                zeroWidthJoinerCount++;
+            }
+            if (isBidiControl(codePoint)) {
+                bidiControlCount++;
+            }
+        }
+
+        private static boolean isBidiControl(int codePoint) {
+            return codePoint == 0x061C
+                    || codePoint == 0x200E
+                    || codePoint == 0x200F
+                    || codePoint >= 0x202A && codePoint <= 0x202E
+                    || codePoint >= 0x2066 && codePoint <= 0x2069;
         }
 
     }
@@ -671,23 +802,75 @@ public final class PdfTextLayerAuditor {
                 || codePoint >= 0 && (codePoint & 0xFFFE) == 0xFFFE;
     }
 
-    private record FontKey(String name, boolean embedded, boolean damaged) {
+    private record FontDescriptor(
+            String subtype,
+            String encoding,
+            boolean vertical,
+            boolean toUnicodePresent,
+            boolean subset
+    ) {
+        private static FontDescriptor malformed() {
+            return new FontDescriptor(
+                    "<malformed>", "<unknown>", false, false, false);
+        }
+    }
+
+    private record FontKey(
+            String name,
+            String subtype,
+            String encoding,
+            boolean embedded,
+            boolean damaged,
+            boolean vertical,
+            boolean toUnicodePresent,
+            boolean subset
+    ) {
     }
 
     private static final class MutableFont {
         private final String name;
+        private final String subtype;
+        private final String encoding;
         private final boolean embedded;
         private final boolean damaged;
+        private final boolean vertical;
+        private final boolean toUnicodePresent;
+        private final boolean subset;
         private int glyphCount;
+        private int rawUnmappedGlyphCount;
 
-        private MutableFont(String name, boolean embedded, boolean damaged) {
+        private MutableFont(
+                String name,
+                String subtype,
+                String encoding,
+                boolean embedded,
+                boolean damaged,
+                boolean vertical,
+                boolean toUnicodePresent,
+                boolean subset
+        ) {
             this.name = name;
+            this.subtype = subtype;
+            this.encoding = encoding;
             this.embedded = embedded;
             this.damaged = damaged;
+            this.vertical = vertical;
+            this.toUnicodePresent = toUnicodePresent;
+            this.subset = subset;
         }
 
         private FontAudit freeze() {
-            return new FontAudit(name, embedded, damaged, glyphCount);
+            return new FontAudit(
+                    name,
+                    subtype,
+                    encoding,
+                    embedded,
+                    damaged,
+                    vertical,
+                    toUnicodePresent,
+                    subset,
+                    glyphCount,
+                    rawUnmappedGlyphCount);
         }
     }
 }

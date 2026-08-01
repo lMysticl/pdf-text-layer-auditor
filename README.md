@@ -174,6 +174,15 @@ java -jar target/pdf-text-layer-auditor.jar --pages 1,3-5 document.pdf
 
 The report keeps the document page numbers and distinguishes total pages from inspected pages.
 
+The auditor is script-neutral: it validates Unicode mappings rather than
+assuming Latin text. Schema v2 reports observed scripts such as `HAN`,
+`ARABIC`, `HEBREW`, `DEVANAGARI`, `THAI`, and `HANGUL`, together with RTL,
+combining-mark, non-BMP, variation-selector, ZWJ, and bidi-control counts.
+Font evidence includes subtype, encoding (`Identity-H`/`Identity-V` when
+declared), vertical-writing mode, embedding/subsetting, `/ToUnicode` presence,
+and raw unmapped glyph counts. A script appearing in this list proves that its
+semantic Unicode was observed; it does not certify shaping or visual fidelity.
+
 Example:
 
 ```text

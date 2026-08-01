@@ -17,6 +17,7 @@ public record PageAudit(
         VisualContentAudit visualContent,
         AnnotationAppearanceAudit annotationAppearances,
         OptionalContentAudit optionalContent,
+        UnicodeProfileAudit unicodeProfile,
         List<FontAudit> fonts,
         List<Finding> findings
 ) {
@@ -37,6 +38,7 @@ public record PageAudit(
         java.util.Objects.requireNonNull(visualContent, "visualContent");
         java.util.Objects.requireNonNull(annotationAppearances, "annotationAppearances");
         java.util.Objects.requireNonNull(optionalContent, "optionalContent");
+        java.util.Objects.requireNonNull(unicodeProfile, "unicodeProfile");
         fonts = List.copyOf(fonts);
         findings = List.copyOf(findings);
     }
@@ -74,6 +76,7 @@ public record PageAudit(
                 VisualContentAudit.unassessed(),
                 AnnotationAppearanceAudit.unassessed(),
                 new OptionalContentAudit(true, 0, 0, 0, 0, 0, 0),
+                new UnicodeProfileAudit(List.of(), 0, 0, 0, 0, 0, 0),
                 fonts,
                 findings);
     }
