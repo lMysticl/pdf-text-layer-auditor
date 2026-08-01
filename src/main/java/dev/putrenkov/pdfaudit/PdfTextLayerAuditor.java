@@ -689,6 +689,9 @@ public final class PdfTextLayerAuditor {
             if (classification == PageClassification.SPARSE_OCR) {
                 findings.add(Finding.SPARSE_TEXT_OVER_FULL_PAGE_IMAGE);
             }
+            if (classification == PageClassification.PARTIAL_OCR) {
+                findings.add(Finding.PARTIAL_TEXT_OVER_FULL_PAGE_IMAGE);
+            }
             AnnotationAppearanceAudit annotationAppearances =
                     visualEvidence.annotationAppearances();
             if (annotationAppearances.missingUnicodeGlyphCount() > 0) {
@@ -818,6 +821,11 @@ public final class PdfTextLayerAuditor {
             if (visualContent.combinedImageCoverageRatio() >= 0.75
                     && unicodeCharacterCount <= 32) {
                 return PageClassification.SPARSE_OCR;
+            }
+            if (visualContent.combinedImageCoverageRatio() >= 0.75
+                    && visualContent.imageOccupiedGridCellCount() > 0
+                    && visualContent.imageTextOverlapRatio() < 0.25) {
+                return PageClassification.PARTIAL_OCR;
             }
             return PageClassification.MIXED;
         }

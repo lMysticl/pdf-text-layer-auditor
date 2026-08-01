@@ -261,6 +261,11 @@ These limits reduce accidental resource use but do not sandbox the PDF parser. P
 - The `SPARSE_OCR` heuristic means the union of painted images covers at least
   75% of the page and the page exposes at most 32 Unicode characters; it is a review signal, not a
   claim that OCR is wrong.
+- `PARTIAL_OCR` divides the crop box into an 8 × 8 grid. When images cover at
+  least 75% of the page but visible page-stream text overlaps less than 25% of
+  the image cells, the page is sent to review even if it exceeds 32 characters.
+  This catches localized headers and page numbers over an otherwise incomplete
+  OCR layer; it is not a semantic OCR comparison.
 - Paint mode, alpha, crop/clip origin, overlap, rotation, and vertical-font
   counters are observations. They are not automatic failures because invisible
   OCR and `/ActualText` layers can be legitimate.

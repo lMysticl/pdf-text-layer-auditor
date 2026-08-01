@@ -126,7 +126,8 @@
             "IMAGE_ONLY",
             "NATIVE_TEXT",
             "MIXED",
-            "SPARSE_OCR"
+            "SPARSE_OCR",
+            "PARTIAL_OCR"
           ]
         },
         "textSurfaces": { "$ref": "#/$defs/textSurfaces" },
@@ -250,6 +251,21 @@
           "minimum": 0,
           "maximum": 1
         },
+        "imageOccupiedGridCellCount": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 64
+        },
+        "imageTextOverlapGridCellCount": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 64
+        },
+        "imageTextOverlapRatio": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
         "paintedVectorPathCount": { "type": ["integer", "null"], "minimum": 0 },
         "annotationCount": { "type": ["integer", "null"], "minimum": 0 },
         "widgetAnnotationCount": { "type": ["integer", "null"], "minimum": 0 },
@@ -361,6 +377,7 @@
             "IMPLICIT_COMPOSITE_UNICODE_MAPPING",
             "READING_ORDER_DIVERGENCE",
             "SPARSE_TEXT_OVER_FULL_PAGE_IMAGE",
+            "PARTIAL_TEXT_OVER_FULL_PAGE_IMAGE",
             "ANNOTATION_MISSING_UNICODE",
             "ANNOTATION_REPLACEMENT_CHARACTERS"
           ]
