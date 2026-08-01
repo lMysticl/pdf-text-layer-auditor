@@ -29,6 +29,8 @@ tests deterministic and avoids depending on fonts installed on the CI host.
   `MISSING_UNICODE`.
 - A real embedded Unicode font produces extractable and visibly rendered Latin,
   Greek, and Cyrillic text.
+- A Type 0 font without `/ToUnicode` is reported as implicit mapping even when
+  PDFBox can infer a plausible string from its encoding.
 
 ## Boundary
 

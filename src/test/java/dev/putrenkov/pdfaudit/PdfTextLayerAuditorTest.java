@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSFloat;
@@ -24,6 +25,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.common.PDStream;
+import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType3Font;
@@ -1017,6 +1019,49 @@ class PdfTextLayerAuditorTest {
                 true)) {
             showHelvetica(content, text, x, y);
         }
+    }
+
+    @Test
+    void flagsCompositeFontTextWhoseUnicodeIsOnlyImplicitlyInferred()
+            throws IOException {
+        Path authored = temporaryDirectory.resolve("authored-type0.pdf");
+        Path implicit = temporaryDirectory.resolve("implicit-type0.pdf");
+        String text = "ABC";
+        try (PDDocument document = new PDDocument();
+                InputStream input = PDTrueTypeFont.class.getResourceAsStream(
+                        "/org/apache/pdfbox/resources/ttf/LiberationSans-Regular.ttf")) {
+            if (input == null) {
+                throw new IllegalStateException("PDFBox Unicode test font is unavailable.");
+            }
+            PDPage page = new PDPage();
+            document.addPage(page);
+            PDType0Font font = PDType0Font.load(document, input, false);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(font, 16);
+                content.newLineAtOffset(72, 720);
+                content.showText(text);
+                content.endText();
+            }
+            document.save(authored.toFile());
+        }
+        try (PDDocument document = Loader.loadPDF(authored.toFile())) {
+            COSName fontName = document.getPage(0).getResources().getFontNames()
+                    .iterator().next();
+            PDFont font = document.getPage(0).getResources().getFont(fontName);
+            font.getCOSObject().removeItem(COSName.TO_UNICODE);
+            document.save(implicit.toFile());
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(implicit).pages().getFirst();
+
+        assertEquals(text.length(), page.glyphCount());
+        assertEquals(
+                text.length(),
+                page.semanticMapping().implicitCompositeMappingGlyphCount());
+        assertTrue(page.findings().contains(Finding.IMPLICIT_COMPOSITE_UNICODE_MAPPING));
+        assertFalse(page.findings().contains(Finding.MISSING_UNICODE));
+        assertFalse(page.fonts().getFirst().toUnicodePresent());
     }
 
     private static void showHelvetica(

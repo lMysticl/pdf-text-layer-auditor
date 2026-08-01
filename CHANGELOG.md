@@ -23,6 +23,9 @@
   selector, ZWJ, and bidi-control counts from semantic page text.
 - Expose bounded font subtype, encoding, vertical-writing, embedding, subset,
   `/ToUnicode`, and per-font raw-unmapped evidence.
+- Flag Type 0 text that depends on implicit Unicode inference because the font
+  has no authored `/ToUnicode` map, without conflating it with definitely
+  unmapped glyphs.
 - Stop adversarial or accidentally pathological documents at explicit glyph,
   semantic-character, font, image, path, annotation, appearance-stream, and
   optional-content work budgets, with a stable machine-readable failure marker.

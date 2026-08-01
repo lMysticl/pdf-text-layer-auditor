@@ -66,6 +66,7 @@ public record PageAudit(
                         Math.max(0, glyphCount - missingUnicodeGlyphCount),
                         missingUnicodeGlyphCount,
                         0,
+                        0,
                         0),
                 new ReadingOrderAudit(
                         false,

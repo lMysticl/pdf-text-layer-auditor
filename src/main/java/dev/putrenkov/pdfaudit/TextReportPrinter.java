@@ -45,10 +45,11 @@ public final class TextReportPrinter {
                     page.textSurfaces().actualTextGlyphCount());
             out.printf(
                     Locale.ROOT,
-                    "  Raw Unicode mapping: mapped=%d, unmapped=%d, ActualText-resolved=%d%n",
+                    "  Raw Unicode mapping: mapped=%d, unmapped=%d, ActualText-resolved=%d, implicit-composite=%d%n",
                     page.semanticMapping().rawMappedGlyphCount(),
                     page.semanticMapping().rawUnmappedGlyphCount(),
-                    page.semanticMapping().actualTextResolvedGlyphCount());
+                    page.semanticMapping().actualTextResolvedGlyphCount(),
+                    page.semanticMapping().implicitCompositeMappingGlyphCount());
             out.printf(
                     Locale.ROOT,
                     "  Reading order: assessed=%s, diverges=%s%n",
