@@ -15,6 +15,8 @@ public enum Finding {
             "A near-full-page image has only a small extracted text layer; OCR may be incomplete."),
     PARTIAL_TEXT_OVER_FULL_PAGE_IMAGE(
             "Visible text occupies too little of a near-full-page image; the text layer may be partial."),
+    RTL_TEXT_REQUIRES_EXTRACTION_PROFILE(
+            "Right-to-left text requires a downstream extraction-order profile before direct routing."),
     ANNOTATION_MISSING_UNICODE(
             "Some annotation appearance glyphs have no usable Unicode mapping."),
     ANNOTATION_REPLACEMENT_CHARACTERS(

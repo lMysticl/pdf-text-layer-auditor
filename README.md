@@ -266,6 +266,11 @@ These limits reduce accidental resource use but do not sandbox the PDF parser. P
   the image cells, the page is sent to review even if it exceeds 32 characters.
   This catches localized headers and page numbers over an otherwise incomplete
   OCR layer; it is not a semantic OCR comparison.
+- Pages containing strong right-to-left characters emit
+  `RTL_TEXT_REQUIRES_EXTRACTION_PROFILE`. PDFBox applies bidi reordering during
+  ordinary text extraction, and the correct downstream order depends on that
+  extractor's contract; the auditor records the script facts and refuses to
+  guess a universal order.
 - Paint mode, alpha, crop/clip origin, overlap, rotation, and vertical-font
   counters are observations. They are not automatic failures because invisible
   OCR and `/ActualText` layers can be legitimate.
