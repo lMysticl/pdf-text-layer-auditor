@@ -46,6 +46,7 @@ import org.apache.pdfbox.util.Vector;
 
 final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     private static final int SPATIAL_GRID_SIZE = 8;
+    private static final int TILED_IMAGE_UNION_THRESHOLD = 64;
     private static final COSName OPTIONAL_CONTENT = COSName.getPDFName("OC");
     private static final COSName OPTIONAL_CONTENT_GROUP = COSName.getPDFName("OCG");
     private static final COSName OPTIONAL_CONTENT_MEMBERSHIP = COSName.getPDFName("OCMD");
@@ -55,7 +56,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     private final AuditWorkLimits workLimits;
     private int imageCount;
     private double maxImageCoverageRatio;
-    private final Area combinedImageArea = new Area();
+    private final AdaptiveAreaUnion combinedImageArea;
     private final Set<Integer> imageGridCells = new HashSet<>();
     private final Set<Integer> visibleTextGridCells = new HashSet<>();
     private int paintedVectorPathCount;
@@ -90,6 +91,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         super(page);
         this.optionalContentProperties = optionalContentProperties;
         this.workLimits = workLimits;
+        this.combinedImageArea = new AdaptiveAreaUnion(page.getCropBox());
     }
 
     static Map<Integer, PageEvidence> analyze(
@@ -666,7 +668,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         if (pageAreaValue <= 0) {
             return 0;
         }
-        return Math.max(0, Math.min(1, area(combinedImageArea) / pageAreaValue));
+        return Math.max(0, Math.min(1, combinedImageArea.area() / pageAreaValue));
     }
 
     private void recordImageGridCells(Area paintedArea) {
@@ -732,5 +734,118 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
             int imageTextOverlapCellCount,
             double imageTextOverlapRatio
     ) {
+    }
+
+    /**
+     * Keeps exact image-union area while preventing one ever-growing Area from
+     * making localized image mosaics progressively more expensive to merge.
+     * The cells partition the page, so their union areas can be summed without
+     * overlap or approximation.
+     */
+    private static final class AdaptiveAreaUnion {
+        private final PDRectangle crop;
+        private Area sequential = new Area();
+        private TiledAreaUnion tiled;
+        private int additions;
+
+        private AdaptiveAreaUnion(PDRectangle crop) {
+            this.crop = crop;
+        }
+
+        private void add(Area paintedArea) {
+            additions++;
+            if (tiled == null) {
+                sequential.add(paintedArea);
+                if (additions > TILED_IMAGE_UNION_THRESHOLD) {
+                    tiled = new TiledAreaUnion(crop);
+                    tiled.add(sequential);
+                    sequential = null;
+                }
+                return;
+            }
+            tiled.add(paintedArea);
+        }
+
+        private double area() {
+            return tiled == null
+                    ? PageVisualAnalyzer.area(sequential)
+                    : tiled.area();
+        }
+    }
+
+    private static final class TiledAreaUnion {
+        private final Rectangle2D.Double[] cells;
+        private final Area[] unions;
+        private final double originX;
+        private final double originY;
+        private final double cellWidth;
+        private final double cellHeight;
+
+        private TiledAreaUnion(PDRectangle crop) {
+            cells = new Rectangle2D.Double[SPATIAL_GRID_SIZE * SPATIAL_GRID_SIZE];
+            unions = new Area[cells.length];
+            originX = crop.getLowerLeftX();
+            originY = crop.getLowerLeftY();
+            cellWidth = crop.getWidth() / SPATIAL_GRID_SIZE;
+            cellHeight = crop.getHeight() / SPATIAL_GRID_SIZE;
+            if (cellWidth <= 0 || cellHeight <= 0) {
+                return;
+            }
+            for (int row = 0; row < SPATIAL_GRID_SIZE; row++) {
+                for (int column = 0; column < SPATIAL_GRID_SIZE; column++) {
+                    int index = row * SPATIAL_GRID_SIZE + column;
+                    cells[index] = new Rectangle2D.Double(
+                            originX + column * cellWidth,
+                            originY + row * cellHeight,
+                            cellWidth,
+                            cellHeight);
+                }
+            }
+        }
+
+        private void add(Area paintedArea) {
+            if (cellWidth <= 0 || cellHeight <= 0 || paintedArea.isEmpty()) {
+                return;
+            }
+            Rectangle2D bounds = paintedArea.getBounds2D();
+            int firstColumn = cellIndex(bounds.getMinX(), originX, cellWidth);
+            int lastColumn = cellIndex(Math.nextDown(bounds.getMaxX()), originX, cellWidth);
+            int firstRow = cellIndex(bounds.getMinY(), originY, cellHeight);
+            int lastRow = cellIndex(Math.nextDown(bounds.getMaxY()), originY, cellHeight);
+            for (int row = firstRow; row <= lastRow; row++) {
+                for (int column = firstColumn; column <= lastColumn; column++) {
+                    int index = row * SPATIAL_GRID_SIZE + column;
+                    Rectangle2D cell = cells[index];
+                    if (!paintedArea.intersects(cell)) {
+                        continue;
+                    }
+                    Area clipped = new Area(paintedArea);
+                    clipped.intersect(new Area(cell));
+                    if (clipped.isEmpty()) {
+                        continue;
+                    }
+                    if (unions[index] == null) {
+                        unions[index] = clipped;
+                    } else {
+                        unions[index].add(clipped);
+                    }
+                }
+            }
+        }
+
+        private double area() {
+            double total = 0;
+            for (Area union : unions) {
+                if (union != null) {
+                    total += PageVisualAnalyzer.area(union);
+                }
+            }
+            return total;
+        }
+
+        private static int cellIndex(double coordinate, double origin, double size) {
+            int index = (int) Math.floor((coordinate - origin) / size);
+            return Math.max(0, Math.min(SPATIAL_GRID_SIZE - 1, index));
+        }
     }
 }

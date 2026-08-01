@@ -173,6 +173,24 @@ class PdfTextLayerAuditorTest {
                     "long header text that exceeds the old character threshold but covers one band",
                     36,
                     720);
+
+            PDPage denseImageMosaic = new PDPage(size);
+            document.addPage(denseImageMosaic);
+            try (PDPageContentStream content =
+                    new PDPageContentStream(document, denseImageMosaic)) {
+                float tileWidth = size.getWidth() / 9;
+                float tileHeight = size.getHeight() / 9;
+                for (int row = 0; row < 9; row++) {
+                    for (int column = 0; column < 9; column++) {
+                        content.drawImage(
+                                image,
+                                column * tileWidth,
+                                row * tileHeight,
+                                tileWidth,
+                                tileHeight);
+                    }
+                }
+            }
             document.save(pdf.toFile());
         }
 
@@ -185,6 +203,7 @@ class PdfTextLayerAuditorTest {
         assertEquals(PageClassification.SPARSE_OCR, pages.get(4).classification());
         assertEquals(PageClassification.SPARSE_OCR, pages.get(5).classification());
         assertEquals(PageClassification.PARTIAL_OCR, pages.get(6).classification());
+        assertEquals(PageClassification.IMAGE_ONLY, pages.get(7).classification());
         assertTrue(pages.get(4).findings()
                 .contains(Finding.SPARSE_TEXT_OVER_FULL_PAGE_IMAGE));
         assertTrue(pages.get(6).findings()
@@ -197,6 +216,9 @@ class PdfTextLayerAuditorTest {
         assertEquals(64, pages.get(6).visualContent().imageOccupiedGridCellCount());
         assertTrue(pages.get(6).visualContent().imageTextOverlapGridCellCount() > 0);
         assertTrue(pages.get(6).visualContent().imageTextOverlapRatio() < 0.25);
+        assertEquals(81, pages.get(7).visualContent().imageCount());
+        assertTrue(pages.get(7).visualContent().maxImageCoverageRatio() < 0.02);
+        assertTrue(pages.get(7).visualContent().combinedImageCoverageRatio() > 0.99);
         assertTrue(pages.get(0).visualContent().paintedVectorPathCount() >= 4);
         assertEquals(1, pages.get(1).visualContent().annotationCount());
         assertEquals(1, pages.get(1).visualContent().widgetAnnotationCount());

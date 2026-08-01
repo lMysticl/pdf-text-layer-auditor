@@ -135,10 +135,6 @@ public final class PdfTextLayerAuditor {
                     tinyTextThresholdPoints,
                     workLimits);
             collector.writeText(document, Writer.nullWriter());
-            PositionOrderCollector positionOrder = new PositionOrderCollector(
-                    selectedPages,
-                    workLimits);
-            positionOrder.writeText(document, Writer.nullWriter());
             Map<Integer, PageVisualAnalyzer.PageEvidence> visualEvidence =
                     PageVisualAnalyzer.analyze(document, selectedPages, workLimits);
             DocumentSurfaceAudit documentSurfaces =
@@ -162,7 +158,7 @@ public final class PdfTextLayerAuditor {
                     EvidenceCompleteness.phaseTwo(visualEvidence.values().stream()
                             .allMatch(evidence -> evidence.optionalContent().complete())),
                     documentSurfaces,
-                    collector.pages(positionOrder, visualEvidence));
+                    collector.pages(visualEvidence));
         }
     }
 
@@ -177,6 +173,7 @@ public final class PdfTextLayerAuditor {
         private final AuditWorkLimits workLimits;
         private long totalGlyphCount;
         private long totalSemanticCharacterCount;
+        private long totalPositionCharacterCount;
 
         private PositionCollector(
                 List<Integer> selectedPages,
@@ -190,7 +187,7 @@ public final class PdfTextLayerAuditor {
                         pageNumber,
                         new MutablePage(pageNumber, tinyTextThresholdPoints));
             }
-            setSortByPosition(false);
+            setSortByPosition(true);
             setSuppressDuplicateOverlappingText(false);
         }
 
@@ -296,9 +293,12 @@ public final class PdfTextLayerAuditor {
             boolean actualTextActive = actualText != null;
             String semanticOverride = actualTextActive ? actualText.consume() : null;
             String semanticText = actualTextActive ? semanticOverride : rawUnicode;
+            int semanticCharacterCount = 0;
             if (semanticText != null) {
-                totalSemanticCharacterCount +=
-                        semanticText.codePointCount(0, semanticText.length());
+                semanticCharacterCount = semanticText.codePointCount(
+                        0,
+                        semanticText.length());
+                totalSemanticCharacterCount += semanticCharacterCount;
                 if (totalSemanticCharacterCount
                         > workLimits.maximumSemanticCharacterCount()) {
                     throw new AuditWorkLimitException(
@@ -314,7 +314,20 @@ public final class PdfTextLayerAuditor {
                     formDepth > 0,
                     actualTextActive,
                     semanticOverride,
+                    semanticCharacterCount,
                     workLimits);
+        }
+
+        @Override
+        protected void writeString(String text) {
+            totalPositionCharacterCount += text.codePointCount(0, text.length());
+            if (totalPositionCharacterCount
+                    > workLimits.maximumSemanticCharacterCount()) {
+                throw new AuditWorkLimitException(
+                        AuditWorkLimitException.Code.SEMANTIC_CHARACTER_COUNT,
+                        workLimits.maximumSemanticCharacterCount());
+            }
+            currentPage.acceptPositionText(text);
         }
 
         private ActualTextFrame activeActualText() {
@@ -337,12 +350,10 @@ public final class PdfTextLayerAuditor {
         }
 
         private List<PageAudit> pages(
-                PositionOrderCollector positionOrder,
                 Map<Integer, PageVisualAnalyzer.PageEvidence> visualEvidence
         ) {
             return pages.values().stream()
                     .map(page -> page.freeze(
-                            positionOrder.text(page.pageNumber),
                             visualEvidence.get(page.pageNumber)))
                     .toList();
         }
@@ -354,75 +365,6 @@ public final class PdfTextLayerAuditor {
                             .thenComparing(ParseDiagnostic::fontName)
                             .thenComparing(diagnostic -> diagnostic.code().name()))
                     .toList();
-        }
-    }
-
-    private static final class PositionOrderCollector extends PDFTextStripper {
-        private final Map<Integer, StringBuilder> pages = new LinkedHashMap<>();
-        private final Set<Integer> selectedPageNumbers;
-        private final AuditWorkLimits workLimits;
-        private long semanticCharacterCount;
-        private StringBuilder currentPage;
-
-        private PositionOrderCollector(
-                List<Integer> selectedPages,
-                AuditWorkLimits workLimits
-        ) {
-            this.workLimits = workLimits;
-            selectedPageNumbers = Set.copyOf(selectedPages);
-            for (int pageNumber : selectedPages) {
-                pages.put(pageNumber, new StringBuilder());
-            }
-            setSortByPosition(true);
-            setSuppressDuplicateOverlappingText(false);
-        }
-
-        @Override
-        public void processPage(PDPage page) throws IOException {
-            if (selectedPageNumbers.contains(getCurrentPageNo())) {
-                super.processPage(page);
-            }
-        }
-
-        @Override
-        protected void startPage(PDPage page) throws IOException {
-            super.startPage(page);
-            currentPage = pages.get(getCurrentPageNo());
-        }
-
-        @Override
-        protected void writeString(String text) {
-            semanticCharacterCount += text.codePointCount(0, text.length());
-            if (semanticCharacterCount > workLimits.maximumSemanticCharacterCount()) {
-                throw new AuditWorkLimitException(
-                        AuditWorkLimitException.Code.SEMANTIC_CHARACTER_COUNT,
-                        workLimits.maximumSemanticCharacterCount());
-            }
-            currentPage.append(text);
-        }
-
-        @Override
-        protected void operatorException(
-                Operator operator,
-                List<COSBase> operands,
-                IOException exception
-        ) throws IOException {
-            if (OperatorName.SET_FONT_AND_SIZE.equals(operator.getName())
-                    && PositionCollector.isRecoverableMalformedType0Font(exception)) {
-                getGraphicsState().getTextState().setFont(null);
-                return;
-            }
-            super.operatorException(operator, operands, exception);
-        }
-
-        @Override
-        protected void endPage(PDPage page) throws IOException {
-            currentPage = null;
-            super.endPage(page);
-        }
-
-        private String text(int pageNumber) {
-            return pages.get(pageNumber).toString();
         }
     }
 
@@ -455,6 +397,7 @@ public final class PdfTextLayerAuditor {
                 Collections.newSetFromMap(new IdentityHashMap<>());
         private final List<ParseDiagnostic> diagnostics = new ArrayList<>();
         private final StringBuilder streamSemanticText = new StringBuilder();
+        private final StringBuilder positionSemanticText = new StringBuilder();
         private int glyphCount;
         private int unicodeCharacterCount;
         private int missingUnicodeGlyphCount;
@@ -488,6 +431,7 @@ public final class PdfTextLayerAuditor {
                 boolean inFormXObject,
                 boolean actualTextActive,
                 String semanticOverride,
+                int semanticCharacterCount,
                 AuditWorkLimits workLimits
         ) {
             glyphCount++;
@@ -516,16 +460,19 @@ public final class PdfTextLayerAuditor {
 
             String unicode = actualTextActive ? semanticOverride : rawUnicode;
             if (unicode != null && !unicode.isEmpty()) {
-                int semanticCharacters = unicode.codePointCount(0, unicode.length());
-                unicodeCharacterCount += semanticCharacters;
+                unicodeCharacterCount += semanticCharacterCount;
                 if (actualTextActive) {
-                    actualTextCharacterCount += semanticCharacters;
+                    actualTextCharacterCount += semanticCharacterCount;
                 }
                 streamSemanticText.append(unicode);
-                replacementCharacterCount += (int) unicode.codePoints()
-                        .filter(codePoint -> codePoint == 0xFFFD)
-                        .count();
-                unicode.codePoints().forEach(this::acceptUnicodeCodePoint);
+                for (int offset = 0; offset < unicode.length(); ) {
+                    int codePoint = unicode.codePointAt(offset);
+                    if (codePoint == 0xFFFD) {
+                        replacementCharacterCount++;
+                    }
+                    acceptUnicodeCodePoint(codePoint);
+                    offset += Character.charCount(codePoint);
+                }
             }
 
             if (tinyTextThresholdPoints > 0
@@ -585,6 +532,10 @@ public final class PdfTextLayerAuditor {
                         pageNumber,
                         displayName(font)));
             }
+        }
+
+        private void acceptPositionText(String text) {
+            positionSemanticText.append(text);
         }
 
         private static ParseDiagnosticCode inspectToUnicode(COSDictionary fontDictionary) {
@@ -650,10 +601,7 @@ public final class PdfTextLayerAuditor {
             return boundedName(name, "<unnamed>");
         }
 
-        private PageAudit freeze(
-                String positionText,
-                PageVisualAnalyzer.PageEvidence visualEvidence
-        ) {
+        private PageAudit freeze(PageVisualAnalyzer.PageEvidence visualEvidence) {
             VisualContentAudit visualContent = visualEvidence.visualContent();
             List<Finding> findings = new ArrayList<>();
             if (glyphCount == 0) {
@@ -683,7 +631,8 @@ public final class PdfTextLayerAuditor {
             }
 
             String canonicalStreamText = canonicalReadingOrderText(streamSemanticText.toString());
-            String canonicalPositionText = canonicalReadingOrderText(positionText);
+            String canonicalPositionText = canonicalReadingOrderText(
+                    positionSemanticText.toString());
             boolean readingOrderDiverges = !canonicalStreamText.equals(canonicalPositionText);
             if (readingOrderDiverges) {
                 findings.add(Finding.READING_ORDER_DIVERGENCE);
@@ -881,10 +830,14 @@ public final class PdfTextLayerAuditor {
 
     private static String canonicalReadingOrderText(String text) {
         StringBuilder canonical = new StringBuilder(text.length());
-        text.codePoints()
-                .filter(codePoint -> !Character.isWhitespace(codePoint)
-                        && !Character.isSpaceChar(codePoint))
-                .forEach(canonical::appendCodePoint);
+        for (int offset = 0; offset < text.length(); ) {
+            int codePoint = text.codePointAt(offset);
+            if (!Character.isWhitespace(codePoint)
+                    && !Character.isSpaceChar(codePoint)) {
+                canonical.appendCodePoint(codePoint);
+            }
+            offset += Character.charCount(codePoint);
+        }
         return canonical.toString();
     }
 
@@ -892,13 +845,20 @@ public final class PdfTextLayerAuditor {
         if (unicode == null || unicode.isEmpty()) {
             return false;
         }
-        return unicode.codePoints().allMatch(codePoint ->
-                codePoint != 0xFFFD
-                        && !Character.isISOControl(codePoint)
-                        && Character.isDefined(codePoint)
-                        && Character.getType(codePoint) != Character.PRIVATE_USE
-                        && Character.getType(codePoint) != Character.SURROGATE
-                        && !isUnicodeNoncharacter(codePoint));
+        for (int offset = 0; offset < unicode.length(); ) {
+            int codePoint = unicode.codePointAt(offset);
+            int type = Character.getType(codePoint);
+            if (codePoint == 0xFFFD
+                    || Character.isISOControl(codePoint)
+                    || !Character.isDefined(codePoint)
+                    || type == Character.PRIVATE_USE
+                    || type == Character.SURROGATE
+                    || isUnicodeNoncharacter(codePoint)) {
+                return false;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return true;
     }
 
     private static boolean isUnicodeNoncharacter(int codePoint) {
