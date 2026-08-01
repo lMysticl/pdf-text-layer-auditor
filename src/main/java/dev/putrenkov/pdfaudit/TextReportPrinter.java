@@ -21,6 +21,7 @@ public final class TextReportPrinter {
         }
         out.println("Parse complete: " + report.parseHealth().complete());
         out.println("Parse recovered: " + report.parseHealth().recovered());
+        out.println("Parser recovery warnings: " + report.parseHealth().parserWarningCount());
         out.println("Typed parse diagnostics: " + report.parseHealth().diagnostics().size());
         out.println("Evidence complete for direct routing: "
                 + report.completeness().completeForDirectRouting());
@@ -76,7 +77,7 @@ public final class TextReportPrinter {
         }
 
         out.println();
-        if (report.needsAttention()) {
+        if (report.pagesNeedingAttention() > 0) {
             int inspectedPageCount = report.pages().size();
             out.printf(
                     Locale.ROOT,
@@ -85,6 +86,8 @@ public final class TextReportPrinter {
                     inspectedPageCount,
                     inspectedPageCount == 1 ? "page" : "pages",
                     inspectedPageCount == 1 ? "needs" : "need");
+        } else if (report.parseHealth().recovered() || !report.parseHealth().complete()) {
+            out.println("Result: document parsing requires review");
         } else {
             out.println("Result: no inspected text-layer problems were found");
         }

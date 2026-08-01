@@ -43,6 +43,7 @@ class JsonReportPrinterTest {
         assertEquals("A\"B\\C\n\u0001\uD83D\uDE00",
                 root.path("pages").path(0).path("fonts").path(0).path("name").asText());
         assertTrue(root.path("parseHealth").path("complete").asBoolean());
+        assertEquals(0, root.path("parseHealth").path("parserWarningCount").asInt());
         assertFalse(root.path("completeness").path("geometryVisibility").asBoolean());
         assertTrue(root.path("pages").path(0).path("geometryVisibility")
                 .path("invisibleGlyphCount").isNull());

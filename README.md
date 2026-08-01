@@ -23,6 +23,7 @@ the source file, or claim accessibility conformance.
 - pages with no native text glyphs
 - glyphs without a usable Unicode mapping
 - composite-font text whose Unicode is inferred without an explicit `/ToUnicode` map
+- parser recovery warnings emitted while PDFBox repairs malformed object structure
 - Unicode replacement characters
 - suspiciously tiny text below a configurable threshold (3 pt by default)
 - fonts used on each page, including embedded and damaged status
@@ -278,6 +279,9 @@ These limits reduce accidental resource use but do not sandbox the PDF parser. P
   in the document completeness object instead of being guessed clean.
 - Password-protected PDFs are not supported.
 - Documents that exceed an internal work budget stop without a partial report.
+- Parser recovery is captured by PDFBox logger category and severity, not by
+  localized message text. A recovered report is reviewable even when all page
+  glyphs look clean.
 - Results are diagnostics, not PDF/UA or accessibility certification.
 
 ## Development

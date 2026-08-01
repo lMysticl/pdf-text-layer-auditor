@@ -79,6 +79,10 @@ public final class Main {
             err.println(
                     "Could not read PDF: " + TerminalText.escape(exception.getMessage()));
             return 2;
+        } catch (RuntimeException exception) {
+            err.println(
+                    "Could not audit PDF: " + TerminalText.escape(exception.getMessage()));
+            return 2;
         }
     }
 
