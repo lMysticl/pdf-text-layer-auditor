@@ -30,6 +30,12 @@ import org.apache.pdfbox.pdmodel.font.PDType3Font;
 import org.apache.pdfbox.pdmodel.font.PDTrueTypeFont;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentGroup;
+import org.apache.pdfbox.pdmodel.graphics.shading.PDShadingType2;
+import org.apache.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState;
+import org.apache.pdfbox.pdmodel.graphics.state.RenderingMode;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
@@ -72,6 +78,146 @@ class PdfTextLayerAuditorTest {
         assertEquals(
                 java.util.List.of(Finding.NO_TEXT_LAYER),
                 report.pages().get(1).findings());
+        assertEquals(PageClassification.NATIVE_TEXT, report.pages().get(0).classification());
+        assertEquals(PageClassification.BLANK, report.pages().get(1).classification());
+    }
+
+    @Test
+    void classifiesVectorImageNativeMixedAndSparseOcrPages() throws IOException {
+        Path pdf = temporaryDirectory.resolve("page-classification.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDRectangle size = PDRectangle.LETTER;
+            PDPage vector = new PDPage(size);
+            document.addPage(vector);
+            try (PDPageContentStream content = new PDPageContentStream(document, vector)) {
+                content.addRect(72, 72, 100, 100);
+                content.fill();
+                content.moveTo(10, 10);
+                content.lineTo(20, 20);
+                content.curveTo(25, 30, 35, 40, 45, 50);
+                content.closePath();
+                content.stroke();
+                content.moveTo(50, 50);
+                content.curveTo2(55, 60, 65, 70);
+                content.lineTo(75, 50);
+                content.fillAndStroke();
+                PDShadingType2 shading = new PDShadingType2(new COSDictionary());
+                content.shadingFill(shading);
+            }
+
+            BufferedImage pixel = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+            var image = LosslessFactory.createFromImage(document, pixel);
+            PDOptionalContentGroup optionalContent =
+                    new PDOptionalContentGroup("test layer");
+            image.setOptionalContent(optionalContent);
+            PDPage imageOnly = new PDPage(size);
+            document.addPage(imageOnly);
+            try (PDPageContentStream content = new PDPageContentStream(document, imageOnly)) {
+                content.beginMarkedContent(COSName.OC, optionalContent);
+                content.drawImage(image, 0, 0, size.getWidth(), size.getHeight());
+                content.endMarkedContent();
+            }
+            PDAnnotationWidget widget = new PDAnnotationWidget();
+            widget.setOptionalContent(optionalContent);
+            imageOnly.setAnnotations(List.of(widget));
+
+            PDPage nativeText = new PDPage(size);
+            document.addPage(nativeText);
+            addHelveticaText(document, nativeText, "native text", 72, 720);
+
+            PDPage mixed = new PDPage(size);
+            document.addPage(mixed);
+            try (PDPageContentStream content = new PDPageContentStream(document, mixed)) {
+                content.drawImage(image, 72, 600, 72, 72);
+            }
+            addHelveticaText(document, mixed, "text plus image", 72, 720);
+
+            PDPage sparseOcr = new PDPage(size);
+            document.addPage(sparseOcr);
+            try (PDPageContentStream content = new PDPageContentStream(document, sparseOcr)) {
+                content.drawImage(image, 0, 0, size.getWidth(), size.getHeight());
+            }
+            addHelveticaText(document, sparseOcr, "few", 72, 720);
+
+            PDPage tiledSparseOcr = new PDPage(size);
+            document.addPage(tiledSparseOcr);
+            try (PDPageContentStream content =
+                    new PDPageContentStream(document, tiledSparseOcr)) {
+                content.drawImage(image, 0, 0, size.getWidth(), size.getHeight() / 2);
+                content.drawImage(
+                        image,
+                        0,
+                        size.getHeight() / 2,
+                        size.getWidth(),
+                        size.getHeight() / 2);
+            }
+            addHelveticaText(document, tiledSparseOcr, "few", 72, 720);
+            document.save(pdf.toFile());
+        }
+
+        List<PageAudit> pages = new PdfTextLayerAuditor().audit(pdf).pages();
+
+        assertEquals(PageClassification.VECTOR_ONLY, pages.get(0).classification());
+        assertEquals(PageClassification.IMAGE_ONLY, pages.get(1).classification());
+        assertEquals(PageClassification.NATIVE_TEXT, pages.get(2).classification());
+        assertEquals(PageClassification.MIXED, pages.get(3).classification());
+        assertEquals(PageClassification.SPARSE_OCR, pages.get(4).classification());
+        assertEquals(PageClassification.SPARSE_OCR, pages.get(5).classification());
+        assertTrue(pages.get(4).findings()
+                .contains(Finding.SPARSE_TEXT_OVER_FULL_PAGE_IMAGE));
+        assertEquals(1, pages.get(1).visualContent().imageCount());
+        assertTrue(pages.get(1).visualContent().maxImageCoverageRatio() > 0.99);
+        assertTrue(pages.get(1).visualContent().combinedImageCoverageRatio() > 0.99);
+        assertTrue(pages.get(5).visualContent().maxImageCoverageRatio() < 0.51);
+        assertTrue(pages.get(5).visualContent().combinedImageCoverageRatio() > 0.99);
+        assertTrue(pages.get(0).visualContent().paintedVectorPathCount() >= 4);
+        assertEquals(1, pages.get(1).visualContent().annotationCount());
+        assertEquals(1, pages.get(1).visualContent().widgetAnnotationCount());
+        assertTrue(pages.get(1).visualContent().optionalContentPresent());
+    }
+
+    @Test
+    void measuresInvisibleTransparentOffPageClippedRotatedAndDuplicateGlyphs()
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("visibility.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.LETTER);
+            document.addPage(page);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                showHelvetica(content, "A", 72, 720);
+                showHelvetica(content, "A", 72, 720);
+
+                content.setRenderingMode(RenderingMode.NEITHER);
+                showHelvetica(content, "B", 90, 720);
+                content.setRenderingMode(RenderingMode.FILL);
+
+                PDExtendedGraphicsState transparent = new PDExtendedGraphicsState();
+                transparent.setNonStrokingAlphaConstant(0f);
+                content.setGraphicsStateParameters(transparent);
+                showHelvetica(content, "C", 110, 720);
+                PDExtendedGraphicsState opaque = new PDExtendedGraphicsState();
+                opaque.setNonStrokingAlphaConstant(1f);
+                content.setGraphicsStateParameters(opaque);
+
+                showHelvetica(content, "D", -1000, -1000);
+
+                content.addRect(0, 0, 10, 10);
+                content.clip();
+                showHelvetica(content, "E", 200, 200);
+            }
+            document.save(pdf.toFile());
+        }
+
+        GeometryVisibilityAudit geometry =
+                new PdfTextLayerAuditor().audit(pdf).pages().getFirst().geometryVisibility();
+
+        assertTrue(geometry.assessed());
+        assertEquals(1, geometry.invisibleGlyphCount());
+        assertEquals(1, geometry.transparentGlyphCount());
+        assertEquals(1, geometry.offPageGlyphCount());
+        assertEquals(1, geometry.clippedGlyphCount());
+        assertEquals(1, geometry.duplicateOverlapGlyphCount());
+        assertEquals(0, geometry.verticalGlyphCount());
     }
 
     @Test
@@ -559,6 +705,35 @@ class PdfTextLayerAuditorTest {
                             .getBytes(StandardCharsets.US_ASCII));
         }
         page.setContents(pageContent);
+    }
+
+    private static void addHelveticaText(
+            PDDocument document,
+            PDPage page,
+            String text,
+            float x,
+            float y
+    ) throws IOException {
+        try (PDPageContentStream content = new PDPageContentStream(
+                document,
+                page,
+                PDPageContentStream.AppendMode.APPEND,
+                true)) {
+            showHelvetica(content, text, x, y);
+        }
+    }
+
+    private static void showHelvetica(
+            PDPageContentStream content,
+            String text,
+            float x,
+            float y
+    ) throws IOException {
+        content.beginText();
+        content.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+        content.newLineAtOffset(x, y);
+        content.showText(text);
+        content.endText();
     }
 
     private static void addActualTextPage(

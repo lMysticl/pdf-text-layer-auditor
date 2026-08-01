@@ -115,6 +115,8 @@ public final class PdfTextLayerAuditor {
             collector.writeText(document, Writer.nullWriter());
             PositionOrderCollector positionOrder = new PositionOrderCollector(selectedPages);
             positionOrder.writeText(document, Writer.nullWriter());
+            Map<Integer, PageVisualAnalyzer.PageEvidence> visualEvidence =
+                    PageVisualAnalyzer.analyze(document, selectedPages);
 
             List<ParseDiagnostic> diagnostics = collector.diagnostics();
 
@@ -126,8 +128,8 @@ public final class PdfTextLayerAuditor {
                     extractionAllowed,
                     tinyTextThresholdPoints,
                     new ParseHealth(true, !diagnostics.isEmpty(), diagnostics),
-                    EvidenceCompleteness.phaseZero(),
-                    collector.pages(positionOrder));
+                    EvidenceCompleteness.phaseOne(),
+                    collector.pages(positionOrder, visualEvidence));
         }
     }
 
@@ -278,9 +280,14 @@ public final class PdfTextLayerAuditor {
             super.endPage(page);
         }
 
-        private List<PageAudit> pages(PositionOrderCollector positionOrder) {
+        private List<PageAudit> pages(
+                PositionOrderCollector positionOrder,
+                Map<Integer, PageVisualAnalyzer.PageEvidence> visualEvidence
+        ) {
             return pages.values().stream()
-                    .map(page -> page.freeze(positionOrder.text(page.pageNumber)))
+                    .map(page -> page.freeze(
+                            positionOrder.text(page.pageNumber),
+                            visualEvidence.get(page.pageNumber)))
                     .toList();
         }
 
@@ -526,7 +533,11 @@ public final class PdfTextLayerAuditor {
             return name == null || name.isBlank() ? "<unnamed>" : name;
         }
 
-        private PageAudit freeze(String positionText) {
+        private PageAudit freeze(
+                String positionText,
+                PageVisualAnalyzer.PageEvidence visualEvidence
+        ) {
+            VisualContentAudit visualContent = visualEvidence.visualContent();
             List<Finding> findings = new ArrayList<>();
             if (glyphCount == 0) {
                 findings.add(Finding.NO_TEXT_LAYER);
@@ -557,6 +568,10 @@ public final class PdfTextLayerAuditor {
             if (readingOrderDiverges) {
                 findings.add(Finding.READING_ORDER_DIVERGENCE);
             }
+            PageClassification classification = classify(visualContent);
+            if (classification == PageClassification.SPARSE_OCR) {
+                findings.add(Finding.SPARSE_TEXT_OVER_FULL_PAGE_IMAGE);
+            }
 
             List<FontAudit> fontAudits = fonts.values().stream()
                     .map(MutableFont::freeze)
@@ -572,7 +587,7 @@ public final class PdfTextLayerAuditor {
                     missingUnicodeGlyphCount,
                     replacementCharacterCount,
                     tinyTextGlyphCount,
-                    PageClassification.UNKNOWN,
+                    classification,
                     new TextSurfaceAudit(
                             glyphCount - formXObjectGlyphCount,
                             formXObjectGlyphCount,
@@ -588,10 +603,34 @@ public final class PdfTextLayerAuditor {
                             readingOrderDiverges,
                             canonicalStreamText.codePointCount(0, canonicalStreamText.length()),
                             canonicalPositionText.codePointCount(0, canonicalPositionText.length())),
-                    GeometryVisibilityAudit.unassessed(),
+                    visualEvidence.geometryVisibility(),
+                    visualContent,
                     fontAudits,
                     findings);
         }
+
+        private PageClassification classify(VisualContentAudit visualContent) {
+            int images = visualContent.imageCount();
+            int vectors = visualContent.paintedVectorPathCount();
+            if (glyphCount == 0) {
+                if (images > 0) {
+                    return PageClassification.IMAGE_ONLY;
+                }
+                if (vectors > 0) {
+                    return PageClassification.VECTOR_ONLY;
+                }
+                return PageClassification.BLANK;
+            }
+            if (images == 0) {
+                return PageClassification.NATIVE_TEXT;
+            }
+            if (visualContent.combinedImageCoverageRatio() >= 0.75
+                    && unicodeCharacterCount <= 32) {
+                return PageClassification.SPARSE_OCR;
+            }
+            return PageClassification.MIXED;
+        }
+
     }
 
     private static String canonicalReadingOrderText(String text) {

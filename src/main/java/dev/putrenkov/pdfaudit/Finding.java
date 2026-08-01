@@ -8,7 +8,9 @@ public enum Finding {
     MALFORMED_TOUNICODE_CMAP("A declared ToUnicode CMap could not be parsed reliably."),
     INVALID_TOUNICODE_CMAP("A declared ToUnicode CMap contains no usable Unicode mappings."),
     READING_ORDER_DIVERGENCE(
-            "Content-stream and position-based extraction produce different character order.");
+            "Content-stream and position-based extraction produce different character order."),
+    SPARSE_TEXT_OVER_FULL_PAGE_IMAGE(
+            "A near-full-page image has only a small extracted text layer; OCR may be incomplete.");
 
     private final String description;
 

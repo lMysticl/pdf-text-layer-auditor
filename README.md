@@ -143,7 +143,8 @@ java -jar target/pdf-text-layer-auditor.jar --json document.pdf
 
 JSON output includes the report summary, parse health, evidence-completeness
 flags, per-page text surfaces, raw-versus-semantic Unicode mapping, reading
-order, font state, and findings. New reports use the strict
+order, page classification, image/vector/annotation inventory, glyph geometry
+and paint-state observations, font state, and findings. New reports use the strict
 [version 2 JSON Schema](docs/report-schema-v2.json); the
 [version 1 schema](docs/report-schema-v1.json) remains published for existing
 consumers. A `false` completeness flag means that the corresponding surface
@@ -238,10 +239,18 @@ These limits reduce accidental resource use but do not sandbox the PDF parser. P
 ## Honest limitations
 
 - This tool does not perform OCR.
-- A healthy native text layer does not guarantee correct reading order.
-- The audit does not determine whether text is visible, on-page, or unclipped.
+- The `SPARSE_OCR` heuristic means the union of painted images covers at least
+  75% of the page and the page exposes at most 32 Unicode characters; it is a review signal, not a
+  claim that OCR is wrong.
+- Paint mode, alpha, crop/clip origin, overlap, rotation, and vertical-font
+  counters are observations. They are not automatic failures because invisible
+  OCR and `/ActualText` layers can be legitimate.
+- Geometry uses glyph origins rather than complete rendered glyph outlines, so
+  it does not prove full or partial visual visibility.
 - PDF text coordinates and Unicode mappings depend on the source file.
-- Annotation appearance text is not included.
+- Annotations, widgets, and optional-content use are inventoried, but annotation
+  appearance text and optional-content visibility states are not yet evaluated;
+  their completeness flags therefore remain `false`.
 - Password-protected PDFs are not supported.
 - Results are diagnostics, not PDF/UA or accessibility certification.
 

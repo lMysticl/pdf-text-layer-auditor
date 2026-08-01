@@ -91,6 +91,7 @@ public final class JsonReportPrinter {
         appendSemanticMapping(json, page.semanticMapping());
         appendReadingOrder(json, page.readingOrder());
         appendGeometryVisibility(json, page.geometryVisibility());
+        appendVisualContent(json, page.visualContent());
         appendBooleanProperty(json, "needsAttention", page.needsAttention());
         json.append(",\"fonts\":[");
 
@@ -160,6 +161,7 @@ public final class JsonReportPrinter {
         appendPropertyPrefix(json, "geometryVisibility");
         json.append('{');
         appendBooleanProperty(json, "assessed", geometry.assessed());
+        appendNullableNumberProperty(json, "visibleGlyphCount", geometry.visibleGlyphCount());
         appendNullableNumberProperty(json, "invisibleGlyphCount", geometry.invisibleGlyphCount());
         appendNullableNumberProperty(json, "offPageGlyphCount", geometry.offPageGlyphCount());
         appendNullableNumberProperty(json, "clippedGlyphCount", geometry.clippedGlyphCount());
@@ -167,6 +169,44 @@ public final class JsonReportPrinter {
                 json,
                 "transparentGlyphCount",
                 geometry.transparentGlyphCount());
+        appendNullableNumberProperty(
+                json,
+                "duplicateOverlapGlyphCount",
+                geometry.duplicateOverlapGlyphCount());
+        appendNullableNumberProperty(json, "rotatedGlyphCount", geometry.rotatedGlyphCount());
+        appendNullableNumberProperty(json, "verticalGlyphCount", geometry.verticalGlyphCount());
+        json.append('}');
+    }
+
+    private static void appendVisualContent(
+            StringBuilder json,
+            VisualContentAudit visual
+    ) {
+        appendPropertyPrefix(json, "visualContent");
+        json.append('{');
+        appendBooleanProperty(json, "assessed", visual.assessed());
+        appendNullableNumberProperty(json, "imageCount", visual.imageCount());
+        appendNullableDecimalProperty(
+                json,
+                "maxImageCoverageRatio",
+                visual.maxImageCoverageRatio());
+        appendNullableDecimalProperty(
+                json,
+                "combinedImageCoverageRatio",
+                visual.combinedImageCoverageRatio());
+        appendNullableNumberProperty(
+                json,
+                "paintedVectorPathCount",
+                visual.paintedVectorPathCount());
+        appendNullableNumberProperty(json, "annotationCount", visual.annotationCount());
+        appendNullableNumberProperty(
+                json,
+                "widgetAnnotationCount",
+                visual.widgetAnnotationCount());
+        appendNullableBooleanProperty(
+                json,
+                "optionalContentPresent",
+                visual.optionalContentPresent());
         json.append('}');
     }
 
@@ -212,6 +252,32 @@ public final class JsonReportPrinter {
     private static void appendBooleanProperty(StringBuilder json, String name, boolean value) {
         appendPropertyPrefix(json, name);
         json.append(value);
+    }
+
+    private static void appendNullableBooleanProperty(
+            StringBuilder json,
+            String name,
+            Boolean value
+    ) {
+        appendPropertyPrefix(json, name);
+        if (value == null) {
+            json.append("null");
+        } else {
+            json.append(value);
+        }
+    }
+
+    private static void appendNullableDecimalProperty(
+            StringBuilder json,
+            String name,
+            Double value
+    ) {
+        appendPropertyPrefix(json, name);
+        if (value == null) {
+            json.append("null");
+        } else {
+            json.append(Double.toString(value));
+        }
     }
 
     private static void appendDecimalProperty(StringBuilder json, String name, float value) {
