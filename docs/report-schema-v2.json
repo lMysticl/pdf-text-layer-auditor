@@ -104,6 +104,7 @@
         "visualContent",
         "annotationAppearances",
         "optionalContent",
+        "unicodeProfile",
         "needsAttention",
         "fonts",
         "findings"
@@ -134,6 +135,7 @@
         "visualContent": { "$ref": "#/$defs/visualContent" },
         "annotationAppearances": { "$ref": "#/$defs/annotationAppearances" },
         "optionalContent": { "$ref": "#/$defs/optionalContent" },
+        "unicodeProfile": { "$ref": "#/$defs/unicodeProfile" },
         "needsAttention": { "type": "boolean" },
         "fonts": {
           "type": "array",
@@ -293,15 +295,50 @@
         "evaluationFailureCount": { "type": "integer", "minimum": 0 }
       }
     },
+    "unicodeProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scripts",
+        "rightToLeftCharacterCount",
+        "combiningMarkCount",
+        "nonBmpCharacterCount",
+        "variationSelectorCount",
+        "zeroWidthJoinerCount",
+        "bidiControlCount"
+      ],
+      "properties": {
+        "scripts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "rightToLeftCharacterCount": { "type": "integer", "minimum": 0 },
+        "combiningMarkCount": { "type": "integer", "minimum": 0 },
+        "nonBmpCharacterCount": { "type": "integer", "minimum": 0 },
+        "variationSelectorCount": { "type": "integer", "minimum": 0 },
+        "zeroWidthJoinerCount": { "type": "integer", "minimum": 0 },
+        "bidiControlCount": { "type": "integer", "minimum": 0 }
+      }
+    },
     "font": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "embedded", "damaged", "glyphCount"],
+      "required": [
+        "name", "subtype", "encoding", "embedded", "damaged", "vertical",
+        "toUnicodePresent", "subset", "glyphCount", "rawUnmappedGlyphCount"
+      ],
       "properties": {
         "name": { "type": "string" },
+        "subtype": { "type": "string" },
+        "encoding": { "type": "string" },
         "embedded": { "type": "boolean" },
         "damaged": { "type": "boolean" },
-        "glyphCount": { "type": "integer", "minimum": 0 }
+        "vertical": { "type": "boolean" },
+        "toUnicodePresent": { "type": "boolean" },
+        "subset": { "type": "boolean" },
+        "glyphCount": { "type": "integer", "minimum": 0 },
+        "rawUnmappedGlyphCount": { "type": "integer", "minimum": 0 }
       }
     },
     "finding": {

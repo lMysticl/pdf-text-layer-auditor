@@ -94,6 +94,7 @@ public final class JsonReportPrinter {
         appendVisualContent(json, page.visualContent());
         appendAnnotationAppearances(json, page.annotationAppearances());
         appendOptionalContent(json, page.optionalContent());
+        appendUnicodeProfile(json, page.unicodeProfile());
         appendBooleanProperty(json, "needsAttention", page.needsAttention());
         json.append(",\"fonts\":[");
 
@@ -262,12 +263,43 @@ public final class JsonReportPrinter {
         json.append('}');
     }
 
+    private static void appendUnicodeProfile(
+            StringBuilder json,
+            UnicodeProfileAudit profile
+    ) {
+        appendPropertyPrefix(json, "unicodeProfile");
+        json.append("{\"scripts\":[");
+        for (int index = 0; index < profile.scripts().size(); index++) {
+            if (index > 0) {
+                json.append(',');
+            }
+            appendQuoted(json, profile.scripts().get(index));
+        }
+        json.append(']');
+        appendNumberProperty(
+                json,
+                "rightToLeftCharacterCount",
+                profile.rightToLeftCharacterCount());
+        appendNumberProperty(json, "combiningMarkCount", profile.combiningMarkCount());
+        appendNumberProperty(json, "nonBmpCharacterCount", profile.nonBmpCharacterCount());
+        appendNumberProperty(json, "variationSelectorCount", profile.variationSelectorCount());
+        appendNumberProperty(json, "zeroWidthJoinerCount", profile.zeroWidthJoinerCount());
+        appendNumberProperty(json, "bidiControlCount", profile.bidiControlCount());
+        json.append('}');
+    }
+
     private static void appendFont(StringBuilder json, FontAudit font) {
         json.append('{');
         appendStringProperty(json, "name", font.name());
+        appendStringProperty(json, "subtype", font.subtype());
+        appendStringProperty(json, "encoding", font.encoding());
         appendBooleanProperty(json, "embedded", font.embedded());
         appendBooleanProperty(json, "damaged", font.damaged());
+        appendBooleanProperty(json, "vertical", font.vertical());
+        appendBooleanProperty(json, "toUnicodePresent", font.toUnicodePresent());
+        appendBooleanProperty(json, "subset", font.subset());
         appendNumberProperty(json, "glyphCount", font.glyphCount());
+        appendNumberProperty(json, "rawUnmappedGlyphCount", font.rawUnmappedGlyphCount());
         json.append('}');
     }
 

@@ -423,7 +423,14 @@ class PdfTextLayerAuditorTest {
 
         assertFalse(page.needsAttention());
         assertEquals(text.codePointCount(0, text.length()), page.unicodeCharacterCount());
-        assertTrue(page.fonts().getFirst().embedded());
+        FontAudit font = page.fonts().getFirst();
+        assertTrue(font.embedded());
+        assertEquals("Type0", font.subtype());
+        assertEquals("Identity-H", font.encoding());
+        assertFalse(font.vertical());
+        assertTrue(font.toUnicodePresent());
+        assertTrue(font.subset());
+        assertEquals(0, font.rawUnmappedGlyphCount());
         try (PDDocument document = org.apache.pdfbox.Loader.loadPDF(pdf.toFile())) {
             assertTrue(new PDFTextStripper().getText(document).contains(text));
             assertTrue(countNonWhitePixels(
@@ -485,6 +492,7 @@ class PdfTextLayerAuditorTest {
         assertEquals(1, page.unicodeCharacterCount());
         assertEquals(1, page.missingUnicodeGlyphCount());
         assertEquals(List.of(Finding.MISSING_UNICODE), page.findings());
+        assertEquals(1, page.fonts().getFirst().rawUnmappedGlyphCount());
     }
 
     @ParameterizedTest(name = "{0}")
@@ -555,6 +563,34 @@ class PdfTextLayerAuditorTest {
         assertEquals(1, page.semanticMapping().actualTextResolvedGlyphCount());
         assertFalse(page.findings().contains(Finding.MISSING_UNICODE));
         assertTrue(report.parseHealth().complete());
+    }
+
+    @Test
+    void profilesChineseRtlComplexScriptsCombiningEmojiAndFormatCharacters()
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("unicode-profile.pdf");
+        String semanticText =
+                "Latin e\u0301 中文 العربية עברית देवनागरी ไทย 한글 😀 ❤️‍💻 \u200F";
+        try (PDDocument document = new PDDocument()) {
+            addActualTextPage(
+                    document,
+                    createUnmappedType3Font(document),
+                    utf16Hex(semanticText));
+            document.save(pdf.toFile());
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+        UnicodeProfileAudit profile = page.unicodeProfile();
+
+        assertTrue(profile.scripts().containsAll(List.of(
+                "ARABIC", "DEVANAGARI", "HAN", "HANGUL", "HEBREW", "LATIN", "THAI")));
+        assertTrue(profile.rightToLeftCharacterCount() > 0);
+        assertTrue(profile.combiningMarkCount() > 0);
+        assertTrue(profile.nonBmpCharacterCount() >= 2);
+        assertTrue(profile.variationSelectorCount() > 0);
+        assertTrue(profile.zeroWidthJoinerCount() > 0);
+        assertEquals(1, profile.bidiControlCount());
+        assertFalse(page.findings().contains(Finding.MISSING_UNICODE));
     }
 
     @Test
@@ -983,6 +1019,14 @@ class PdfTextLayerAuditorTest {
         characterProcedures.setItem(COSName.getPDFName("A"), characterStream);
         dictionary.setItem(COSName.CHAR_PROCS, characterProcedures);
         return new PDType3Font(dictionary);
+    }
+
+    private static String utf16Hex(String text) {
+        StringBuilder hex = new StringBuilder(text.length() * 4);
+        for (byte value : text.getBytes(StandardCharsets.UTF_16BE)) {
+            hex.append(String.format(java.util.Locale.ROOT, "%02X", value & 0xFF));
+        }
+        return hex.toString();
     }
 
     private static PDAppearanceStream createAppearance(
