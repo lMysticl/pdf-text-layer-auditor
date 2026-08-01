@@ -756,6 +756,51 @@ class PdfTextLayerAuditorTest {
         assertFalse(page.findings().contains(Finding.MISSING_UNICODE));
     }
 
+    @ParameterizedTest(name = "language text: {0}")
+    @MethodSource("exactLanguageMappings")
+    void preservesExactSemanticTextAndProfilesItsScripts(
+            String label,
+            String expectedText,
+            List<String> expectedScripts,
+            boolean expectedRightToLeft
+    ) throws IOException {
+        Path pdf = temporaryDirectory.resolve("language-" + label + ".pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDType3Font font = createType3Font(document, "ExactLanguageText");
+            font.getCOSObject().setItem(
+                    COSName.TO_UNICODE,
+                    createToUnicodeCMap(
+                            document,
+                            "<41> <" + utf16Hex(expectedText) + ">"));
+            addType3TextPage(document, font);
+            document.save(pdf.toFile());
+        }
+
+        String extracted;
+        try (PDDocument document = Loader.loadPDF(pdf.toFile())) {
+            extracted = new PDFTextStripper().getText(document).strip();
+        }
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+
+        if (expectedRightToLeft) {
+            assertFalse(extracted.isBlank());
+        } else {
+            assertEquals(expectedText, extracted);
+        }
+        assertEquals(
+                expectedText.codePointCount(0, expectedText.length()),
+                page.unicodeCharacterCount());
+        assertEquals(expectedScripts, page.unicodeProfile().scripts());
+        assertEquals(
+                expectedRightToLeft,
+                page.unicodeProfile().rightToLeftCharacterCount() > 0);
+        assertEquals(
+                expectedRightToLeft,
+                page.findings().contains(Finding.RTL_TEXT_REQUIRES_EXTRACTION_PROFILE));
+        assertEquals(0, page.missingUnicodeGlyphCount());
+        assertFalse(page.findings().contains(Finding.MISSING_UNICODE));
+    }
+
     @Test
     void convertsMalformedDeclaredToUnicodeIntoTypedEvidence() throws IOException {
         Path pdf = temporaryDirectory.resolve("malformed-tounicode.pdf");
@@ -1179,6 +1224,32 @@ class PdfTextLayerAuditorTest {
                 Arguments.of("noncharacter-plane", "FDD0"),
                 Arguments.of("noncharacter-bmp-end", "FFFE"),
                 Arguments.of("noncharacter-max", "DBDFFFFF")
+        );
+    }
+
+    private static Stream<Arguments> exactLanguageMappings() {
+        return Stream.of(
+                Arguments.of("latin", "Zażółć gęślą jaźń", List.of("LATIN"), false),
+                Arguments.of("vietnamese-nfd", "Tiếng Việt", List.of("LATIN"), false),
+                Arguments.of("cyrillic", "Привет світ", List.of("CYRILLIC"), false),
+                Arguments.of("greek", "Ελληνικά", List.of("GREEK"), false),
+                Arguments.of("arabic", "العربية ١٢٣", List.of("ARABIC"), true),
+                Arguments.of("hebrew", "עברית 123", List.of("HEBREW"), true),
+                Arguments.of("syriac", "ܣܘܪܝܝܐ", List.of("SYRIAC"), true),
+                Arguments.of("devanagari", "हिन्दी", List.of("DEVANAGARI"), false),
+                Arguments.of("bengali", "বাংলা", List.of("BENGALI"), false),
+                Arguments.of("tamil", "தமிழ்", List.of("TAMIL"), false),
+                Arguments.of("thai", "ภาษาไทย", List.of("THAI"), false),
+                Arguments.of("chinese", "中文繁體", List.of("HAN"), false),
+                Arguments.of(
+                        "japanese",
+                        "日本語かなカナ",
+                        List.of("HAN", "HIRAGANA", "KATAKANA"),
+                        false),
+                Arguments.of("korean", "한국어", List.of("HANGUL"), false),
+                Arguments.of("armenian", "Հայերեն", List.of("ARMENIAN"), false),
+                Arguments.of("georgian", "ქართული", List.of("GEORGIAN"), false),
+                Arguments.of("ethiopic", "አማርኛ", List.of("ETHIOPIC"), false)
         );
     }
 

@@ -692,6 +692,9 @@ public final class PdfTextLayerAuditor {
             if (classification == PageClassification.PARTIAL_OCR) {
                 findings.add(Finding.PARTIAL_TEXT_OVER_FULL_PAGE_IMAGE);
             }
+            if (rightToLeftCharacterCount > 0) {
+                findings.add(Finding.RTL_TEXT_REQUIRES_EXTRACTION_PROFILE);
+            }
             AnnotationAppearanceAudit annotationAppearances =
                     visualEvidence.annotationAppearances();
             if (annotationAppearances.missingUnicodeGlyphCount() > 0) {
