@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.6.2 — 2026-08-01
+
+- Capture stream-order and position-order evidence in one PDFBox text pass,
+  preserving schema-v2 output while removing a redundant page traversal.
+- Replace allocation-heavy Unicode streams with bounded single-pass code-point
+  loops, including non-BMP text.
+- Partition image-union geometry after 64 painted images, avoiding progressive
+  `AreaOp` cost on image mosaics while preserving the exact sequential result
+  for ordinary pages.
+- Verify the optimized auditor against all 48 real PDFBox issue attachments:
+  identical exit/routing semantics, with only a `1e-16` coverage-value delta on
+  one 89-image page and no changed finding or classification.
+
 ## 0.6.1 — 2026-08-01
 
 - Convert JVM heap and stack exhaustion into stable machine-readable work-limit
