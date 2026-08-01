@@ -22,6 +22,7 @@ the source file, or claim accessibility conformance.
 
 - pages with no native text glyphs
 - glyphs without a usable Unicode mapping
+- composite-font text whose Unicode is inferred without an explicit `/ToUnicode` map
 - Unicode replacement characters
 - suspiciously tiny text below a configurable threshold (3 pt by default)
 - fonts used on each page, including embedded and damaged status
@@ -265,6 +266,10 @@ These limits reduce accidental resource use but do not sandbox the PDF parser. P
 - Geometry uses glyph origins rather than complete rendered glyph outlines, so
   it does not prove full or partial visual visibility.
 - PDF text coordinates and Unicode mappings depend on the source file.
+- `IMPLICIT_COMPOSITE_UNICODE_MAPPING` is a provenance warning, not proof that
+  every extracted character is wrong. Without `/ToUnicode`, a viewer or parser
+  may infer plausible text from a predefined CMap; semantic equivalence still
+  needs an authored map, a trusted reference, or OCR comparison.
 - Normal, rollover, and down annotation appearance streams are checked
   separately from page text. Form values without a generated appearance stream
   cannot be inferred from the field value alone.

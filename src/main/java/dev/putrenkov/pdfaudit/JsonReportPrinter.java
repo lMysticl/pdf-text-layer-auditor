@@ -144,6 +144,10 @@ public final class JsonReportPrinter {
                 json,
                 "malformedToUnicodeFontCount",
                 mapping.malformedToUnicodeFontCount());
+        appendNumberProperty(
+                json,
+                "implicitCompositeMappingGlyphCount",
+                mapping.implicitCompositeMappingGlyphCount());
         json.append('}');
     }
 

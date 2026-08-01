@@ -7,6 +7,8 @@ public enum Finding {
     TINY_TEXT("Some text is below the configured size threshold and may be hidden or unreliable."),
     MALFORMED_TOUNICODE_CMAP("A declared ToUnicode CMap could not be parsed reliably."),
     INVALID_TOUNICODE_CMAP("A declared ToUnicode CMap contains no usable Unicode mappings."),
+    IMPLICIT_COMPOSITE_UNICODE_MAPPING(
+            "A composite font has no explicit ToUnicode map; extracted Unicode may be inferred rather than authored."),
     READING_ORDER_DIVERGENCE(
             "Content-stream and position-based extraction produce different character order."),
     SPARSE_TEXT_OVER_FULL_PAGE_IMAGE(

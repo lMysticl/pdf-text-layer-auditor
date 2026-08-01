@@ -170,13 +170,15 @@
         "rawMappedGlyphCount",
         "rawUnmappedGlyphCount",
         "actualTextResolvedGlyphCount",
-        "malformedToUnicodeFontCount"
+        "malformedToUnicodeFontCount",
+        "implicitCompositeMappingGlyphCount"
       ],
       "properties": {
         "rawMappedGlyphCount": { "type": "integer", "minimum": 0 },
         "rawUnmappedGlyphCount": { "type": "integer", "minimum": 0 },
         "actualTextResolvedGlyphCount": { "type": "integer", "minimum": 0 },
-        "malformedToUnicodeFontCount": { "type": "integer", "minimum": 0 }
+        "malformedToUnicodeFontCount": { "type": "integer", "minimum": 0 },
+        "implicitCompositeMappingGlyphCount": { "type": "integer", "minimum": 0 }
       }
     },
     "readingOrder": {
@@ -355,6 +357,7 @@
             "TINY_TEXT",
             "MALFORMED_TOUNICODE_CMAP",
             "INVALID_TOUNICODE_CMAP",
+            "IMPLICIT_COMPOSITE_UNICODE_MAPPING",
             "READING_ORDER_DIVERGENCE",
             "SPARSE_TEXT_OVER_FULL_PAGE_IMAGE",
             "ANNOTATION_MISSING_UNICODE",

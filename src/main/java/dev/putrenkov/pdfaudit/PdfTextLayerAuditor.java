@@ -458,6 +458,7 @@ public final class PdfTextLayerAuditor {
         private int rawUnmappedGlyphCount;
         private int actualTextResolvedGlyphCount;
         private int malformedToUnicodeFontCount;
+        private int implicitCompositeMappingGlyphCount;
         private final Set<String> unicodeScripts = new java.util.TreeSet<>();
         private int rightToLeftCharacterCount;
         private int combiningMarkCount;
@@ -491,6 +492,9 @@ public final class PdfTextLayerAuditor {
                 rawUnmappedGlyphCount++;
             } else {
                 rawMappedGlyphCount++;
+            }
+            if (!mappingUntrusted && usesImplicitCompositeMapping(text)) {
+                implicitCompositeMappingGlyphCount++;
             }
             if (actualTextActive) {
                 actualTextGlyphCount++;
@@ -619,6 +623,16 @@ public final class PdfTextLayerAuditor {
             }
         }
 
+        private static boolean usesImplicitCompositeMapping(TextPosition text) {
+            PDFont font = text.getFont();
+            if (font == null) {
+                return false;
+            }
+            COSDictionary dictionary = font.getCOSObject();
+            return COSName.TYPE0.equals(dictionary.getCOSName(COSName.SUBTYPE))
+                    && !dictionary.containsKey(COSName.TO_UNICODE);
+        }
+
         private static String displayName(PDFont font) {
             if (font == null) {
                 return "<unknown>";
@@ -654,6 +668,9 @@ public final class PdfTextLayerAuditor {
                     diagnostic -> diagnostic.code()
                             == ParseDiagnosticCode.INVALID_TOUNICODE_CMAP)) {
                 findings.add(Finding.INVALID_TOUNICODE_CMAP);
+            }
+            if (implicitCompositeMappingGlyphCount > 0) {
+                findings.add(Finding.IMPLICIT_COMPOSITE_UNICODE_MAPPING);
             }
 
             String canonicalStreamText = canonicalReadingOrderText(streamSemanticText.toString());
@@ -704,7 +721,8 @@ public final class PdfTextLayerAuditor {
                             rawMappedGlyphCount,
                             rawUnmappedGlyphCount,
                             actualTextResolvedGlyphCount,
-                            malformedToUnicodeFontCount),
+                            malformedToUnicodeFontCount,
+                            implicitCompositeMappingGlyphCount),
                     new ReadingOrderAudit(
                             true,
                             readingOrderDiverges,
