@@ -47,6 +47,9 @@ class TextReportPrinterTest {
         assertTrue(lines.contains("Page 1: 0 glyphs, 0 Unicode characters, 0 fonts"));
         assertTrue(lines.contains("Page 2: 1 glyphs, 1 Unicode characters, 1 font"));
         assertTrue(lines.contains("Page 3: 2 glyphs, 2 Unicode characters, 2 fonts"));
+        assertTrue(lines.contains("Parse complete: true"));
+        assertTrue(lines.contains("Evidence complete for direct routing: false"));
+        assertTrue(lines.contains("  Reading order: assessed=false, diverges=false"));
     }
 
     @Test

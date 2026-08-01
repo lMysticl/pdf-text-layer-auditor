@@ -10,6 +10,8 @@ public record AuditReport(
         boolean encrypted,
         boolean extractionAllowed,
         float tinyTextThresholdPoints,
+        ParseHealth parseHealth,
+        EvidenceCompleteness completeness,
         List<PageAudit> pages
 ) {
     public AuditReport {
@@ -17,7 +19,30 @@ public record AuditReport(
             throw new IllegalArgumentException(
                     "tinyTextThresholdPoints must be finite and non-negative");
         }
+        java.util.Objects.requireNonNull(parseHealth, "parseHealth");
+        java.util.Objects.requireNonNull(completeness, "completeness");
         pages = List.copyOf(pages);
+    }
+
+    public AuditReport(
+            Path file,
+            long fileSizeBytes,
+            int pageCount,
+            boolean encrypted,
+            boolean extractionAllowed,
+            float tinyTextThresholdPoints,
+            List<PageAudit> pages
+    ) {
+        this(
+                file,
+                fileSizeBytes,
+                pageCount,
+                encrypted,
+                extractionAllowed,
+                tinyTextThresholdPoints,
+                new ParseHealth(true, false, List.of()),
+                EvidenceCompleteness.phaseZero(),
+                pages);
     }
 
     public long pagesNeedingAttention() {

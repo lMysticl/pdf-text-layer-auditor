@@ -270,6 +270,88 @@ class PdfTextLayerAuditorTest {
     }
 
     @Test
+    void treatsActualTextAsSemanticEvidenceWithoutHidingRawMappingProvenance()
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("actual-text.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDType3Font font = createUnmappedType3Font(document);
+            addActualTextPage(document, font, "0915");
+            document.save(pdf.toFile());
+        }
+
+        AuditReport report = new PdfTextLayerAuditor().audit(pdf);
+        PageAudit page = report.pages().getFirst();
+
+        assertEquals(1, page.glyphCount());
+        assertEquals(1, page.unicodeCharacterCount());
+        assertEquals(0, page.missingUnicodeGlyphCount());
+        assertEquals(1, page.textSurfaces().actualTextGlyphCount());
+        assertEquals(1, page.textSurfaces().actualTextCharacterCount());
+        assertEquals(1, page.semanticMapping().rawUnmappedGlyphCount());
+        assertEquals(1, page.semanticMapping().actualTextResolvedGlyphCount());
+        assertFalse(page.findings().contains(Finding.MISSING_UNICODE));
+        assertTrue(report.parseHealth().complete());
+    }
+
+    @Test
+    void convertsMalformedDeclaredToUnicodeIntoTypedEvidence() throws IOException {
+        Path pdf = temporaryDirectory.resolve("malformed-tounicode.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDType3Font font = createType3Font(document, "MalformedMap");
+            COSStream malformed = document.getDocument().createCOSStream();
+            try (var output = malformed.createOutputStream()) {
+                output.write("1 beginbfchar <41> <00G1> endbfchar"
+                        .getBytes(StandardCharsets.US_ASCII));
+            }
+            font.getCOSObject().setItem(COSName.TO_UNICODE, malformed);
+            addType3TextPage(document, font);
+            document.save(pdf.toFile());
+        }
+
+        AuditReport report = new PdfTextLayerAuditor().audit(pdf);
+        PageAudit page = report.pages().getFirst();
+
+        assertTrue(report.parseHealth().recovered());
+        assertEquals(
+                List.of(ParseDiagnosticCode.MALFORMED_TOUNICODE_CMAP),
+                report.parseHealth().diagnostics().stream()
+                        .map(ParseDiagnostic::code)
+                        .toList());
+        assertEquals(1, page.semanticMapping().malformedToUnicodeFontCount());
+        assertTrue(page.findings().contains(Finding.MALFORMED_TOUNICODE_CMAP));
+    }
+
+    @Test
+    void detectsWhenContentStreamAndPositionReadingOrdersDiverge() throws IOException {
+        Path pdf = temporaryDirectory.resolve("out-of-order.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                content.newLineAtOffset(100, 720);
+                content.showText("B");
+                content.endText();
+                content.beginText();
+                content.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                content.newLineAtOffset(72, 720);
+                content.showText("A");
+                content.endText();
+            }
+            document.save(pdf.toFile());
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+
+        assertTrue(page.readingOrder().assessed());
+        assertTrue(page.readingOrder().diverges());
+        assertEquals(2, page.readingOrder().streamCharacterCount());
+        assertEquals(2, page.readingOrder().positionCharacterCount());
+        assertTrue(page.findings().contains(Finding.READING_ORDER_DIVERGENCE));
+    }
+
+    @Test
     void flagsTextStripperFallbackWhenFontHasNoUnicodeMapping() throws IOException {
         Path pdf = temporaryDirectory.resolve("fallback-unicode.pdf");
         try (PDDocument document = new PDDocument()) {
@@ -475,6 +557,25 @@ class PdfTextLayerAuditorTest {
             output.write(
                     "BT /F1 12 Tf 72 720 Td <41> Tj ET"
                             .getBytes(StandardCharsets.US_ASCII));
+        }
+        page.setContents(pageContent);
+    }
+
+    private static void addActualTextPage(
+            PDDocument document,
+            PDType3Font font,
+            String actualTextUtf16Hex
+    ) throws IOException {
+        PDPage page = new PDPage();
+        document.addPage(page);
+        page.setResources(new PDResources());
+        page.getResources().put(COSName.getPDFName("F1"), font);
+
+        PDStream pageContent = new PDStream(document);
+        try (var output = pageContent.createOutputStream()) {
+            output.write(("/Span << /ActualText <FEFF" + actualTextUtf16Hex
+                            + ">> BDC BT /F1 12 Tf 72 720 Td <41> Tj ET EMC")
+                    .getBytes(StandardCharsets.US_ASCII));
         }
         page.setContents(pageContent);
     }
