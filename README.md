@@ -109,9 +109,10 @@ files through the pull-request files endpoint, so the action also rejects
 larger pull requests instead of silently auditing an incomplete list.
 
 The combined report follows the versioned
-[GitHub Action report schema](docs/action-report-schema-v1.json). Each
-successful file entry embeds the existing
-[auditor report schema](docs/report-schema-v1.json).
+[GitHub Action report schema v2](docs/action-report-schema-v2.json). Each
+successful file entry embeds the
+[auditor report schema v2](docs/report-schema-v2.json). The v1 schemas remain
+available for consumers of releases through 0.5.x.
 
 ## Quick start
 
@@ -140,7 +141,15 @@ Emit a machine-readable report:
 java -jar target/pdf-text-layer-auditor.jar --json document.pdf
 ```
 
-JSON output includes the report summary, per-page metrics, font state, and findings. Every document declares `schemaVersion`; the strict [version 1 JSON Schema](docs/report-schema-v1.json) is published with the repository. Successful reports always set `extractionAllowed` to `true`; a PDF that forbids extraction produces exit code `2` and no report. The default output remains human-readable.
+JSON output includes the report summary, parse health, evidence-completeness
+flags, per-page text surfaces, raw-versus-semantic Unicode mapping, reading
+order, font state, and findings. New reports use the strict
+[version 2 JSON Schema](docs/report-schema-v2.json); the
+[version 1 schema](docs/report-schema-v1.json) remains published for existing
+consumers. A `false` completeness flag means that the corresponding surface
+was not assessed and must not be interpreted as clean. Successful reports
+always set `extractionAllowed` to `true`; a PDF that forbids extraction
+produces exit code `2` and no report. The default output remains human-readable.
 
 The tiny-text threshold defaults to 3 pt. Adjust it for a specific workflow, or use `0` to disable that finding:
 

@@ -1,8 +1,10 @@
 package dev.putrenkov.pdfaudit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.networknt.schema.InputFormat;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.SpecificationVersion;
@@ -12,8 +14,10 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class JsonReportPrinterTest {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     @Test
-    void serializesCompleteReportAndEscapesStrings() throws Exception {
+    void serializesCompleteVersionTwoReportAndEscapesStrings() throws Exception {
         PageAudit page = new PageAudit(
                 1,
                 4,
@@ -31,36 +35,23 @@ class JsonReportPrinterTest {
                 true,
                 3.0f,
                 List.of(page));
+
         String json = JsonReportPrinter.toJson(report);
+        var root = MAPPER.readTree(json);
 
-        assertEquals(
-                "{\"schemaVersion\":1,\"file\":\"document.pdf\","
-                        + "\"fileSizeBytes\":123,\"pageCount\":1,"
-                        + "\"inspectedPageCount\":1,"
-                        + "\"encrypted\":false,\"extractionAllowed\":true,"
-                        + "\"tinyTextThresholdPoints\":3.0,"
-                        + "\"needsAttention\":true,\"pagesNeedingAttention\":1,"
-                        + "\"pages\":[{\"pageNumber\":1,\"glyphCount\":4,"
-                        + "\"unicodeCharacterCount\":3,\"missingUnicodeGlyphCount\":1,"
-                        + "\"replacementCharacterCount\":0,\"tinyTextGlyphCount\":2,"
-                        + "\"needsAttention\":true,\"fonts\":[{\"name\":\"A\\\"B\\\\C\\n"
-                        + "\\u0001\\ud83d\\ude00\","
-                        + "\"embedded\":true,\"damaged\":false,\"glyphCount\":4}],"
-                        + "\"findings\":[{\"code\":\"MISSING_UNICODE\","
-                        + "\"description\":\"Some glyphs have no usable Unicode mapping.\"}]}]}",
-                json);
+        assertEquals(2, root.path("schemaVersion").asInt());
+        assertEquals("A\"B\\C\n\u0001\uD83D\uDE00",
+                root.path("pages").path(0).path("fonts").path(0).path("name").asText());
+        assertTrue(root.path("parseHealth").path("complete").asBoolean());
+        assertFalse(root.path("completeness").path("geometryVisibility").asBoolean());
+        assertTrue(root.path("pages").path(0).path("geometryVisibility")
+                .path("invisibleGlyphCount").isNull());
 
-        String schemaDocument = Files.readString(Path.of("docs", "report-schema-v1.json"));
-        SchemaRegistry registry =
-                SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12);
-
-        var errors = registry.getSchema(schemaDocument).validate(json, InputFormat.JSON);
-
-        assertTrue(errors.isEmpty(), errors::toString);
+        assertValidAgainst("report-schema-v2.json", json);
     }
 
     @Test
-    void serializesEmptyCollections() {
+    void serializesEmptyCollections() throws Exception {
         AuditReport report = new AuditReport(
                 Path.of("document.pdf"),
                 0,
@@ -70,30 +61,29 @@ class JsonReportPrinterTest {
                 0.0f,
                 List.of());
 
-        assertEquals(
-                "{\"schemaVersion\":1,\"file\":\"document.pdf\","
-                        + "\"fileSizeBytes\":0,\"pageCount\":0,"
-                        + "\"inspectedPageCount\":0,"
-                        + "\"encrypted\":false,\"extractionAllowed\":true,"
-                        + "\"tinyTextThresholdPoints\":0.0,"
-                        + "\"needsAttention\":false,\"pagesNeedingAttention\":0,\"pages\":[]}",
-                JsonReportPrinter.toJson(report));
+        var root = MAPPER.readTree(JsonReportPrinter.toJson(report));
+
+        assertEquals(2, root.path("schemaVersion").asInt());
+        assertEquals(0, root.path("pages").size());
+        assertEquals(0, root.path("parseHealth").path("diagnostics").size());
     }
 
     @Test
-    void versionOneSchemaRemainsCompatibleWithExtractionDeniedReports() throws Exception {
-        String schemaDocument = Files.readString(Path.of("docs", "report-schema-v1.json"));
+    void versionOneSchemaRemainsPublishedForExistingConsumers() throws Exception {
+        String legacyJson = """
+                {"schemaVersion":1,"file":"document.pdf","fileSizeBytes":123,
+                "pageCount":1,"inspectedPageCount":0,"encrypted":true,
+                "extractionAllowed":false,"tinyTextThresholdPoints":3.0,
+                "needsAttention":false,"pagesNeedingAttention":0,"pages":[]}
+                """;
+
+        assertValidAgainst("report-schema-v1.json", legacyJson);
+    }
+
+    private static void assertValidAgainst(String schemaName, String json) throws Exception {
+        String schemaDocument = Files.readString(Path.of("docs", schemaName));
         SchemaRegistry registry =
                 SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12);
-        AuditReport report = new AuditReport(
-                Path.of("document.pdf"),
-                123,
-                1,
-                true,
-                false,
-                3.0f,
-                List.of());
-        String json = JsonReportPrinter.toJson(report);
 
         var errors = registry.getSchema(schemaDocument).validate(json, InputFormat.JSON);
 

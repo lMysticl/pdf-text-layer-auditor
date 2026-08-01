@@ -4,20 +4,31 @@ import java.io.IOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.fontbox.cmap.CMap;
+import org.apache.fontbox.cmap.CMapParser;
 import org.apache.pdfbox.contentstream.operator.Operator;
 import org.apache.pdfbox.contentstream.operator.OperatorName;
 import org.apache.pdfbox.cos.COSBase;
+import org.apache.pdfbox.cos.COSDictionary;
+import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.cos.COSStream;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.io.IOUtils;
+import org.apache.pdfbox.io.RandomAccessRead;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.TextPosition;
 
@@ -102,6 +113,10 @@ public final class PdfTextLayerAuditor {
                     selectedPages,
                     tinyTextThresholdPoints);
             collector.writeText(document, Writer.nullWriter());
+            PositionOrderCollector positionOrder = new PositionOrderCollector(selectedPages);
+            positionOrder.writeText(document, Writer.nullWriter());
+
+            List<ParseDiagnostic> diagnostics = collector.diagnostics();
 
             return new AuditReport(
                     file,
@@ -110,16 +125,20 @@ public final class PdfTextLayerAuditor {
                     document.isEncrypted(),
                     extractionAllowed,
                     tinyTextThresholdPoints,
-                    collector.pages());
+                    new ParseHealth(true, !diagnostics.isEmpty(), diagnostics),
+                    EvidenceCompleteness.phaseZero(),
+                    collector.pages(positionOrder));
         }
     }
 
     private static final class PositionCollector extends PDFTextStripper {
         private final Map<Integer, MutablePage> pages = new LinkedHashMap<>();
         private final Set<Integer> selectedPageNumbers;
+        private final Deque<ActualTextFrame> actualTextFrames = new ArrayDeque<>();
         private MutablePage currentPage;
         private boolean malformedFontFallback;
         private boolean fontSelectionFailed;
+        private int formDepth;
 
         private PositionCollector(
                 List<Integer> selectedPages,
@@ -148,6 +167,8 @@ public final class PdfTextLayerAuditor {
             currentPage = pages.get(getCurrentPageNo());
             malformedFontFallback = false;
             fontSelectionFailed = false;
+            actualTextFrames.clear();
+            formDepth = 0;
         }
 
         @Override
@@ -158,6 +179,7 @@ public final class PdfTextLayerAuditor {
                 super.processOperator(operator, operands);
                 if (!fontSelectionFailed) {
                     malformedFontFallback = false;
+                    currentPage.inspectFont(getGraphicsState().getTextState().getFont());
                 }
                 return;
             }
@@ -192,9 +214,58 @@ public final class PdfTextLayerAuditor {
         }
 
         @Override
+        public void beginMarkedContentSequence(COSName tag, COSDictionary properties) {
+            String actualText = properties == null
+                    ? null
+                    : properties.getString(COSName.ACTUAL_TEXT);
+            actualTextFrames.push(new ActualTextFrame(actualText));
+            super.beginMarkedContentSequence(tag, properties);
+        }
+
+        @Override
+        public void endMarkedContentSequence() {
+            try {
+                super.endMarkedContentSequence();
+            } finally {
+                if (!actualTextFrames.isEmpty()) {
+                    actualTextFrames.pop();
+                }
+            }
+        }
+
+        @Override
+        public void showForm(PDFormXObject form) throws IOException {
+            formDepth++;
+            try {
+                super.showForm(form);
+            } finally {
+                formDepth--;
+            }
+        }
+
+        @Override
         protected void processTextPosition(TextPosition text) {
-            currentPage.accept(text, malformedFontFallback);
+            String rawUnicode = text.getUnicode();
+            ActualTextFrame actualText = activeActualText();
+            boolean actualTextActive = actualText != null;
+            String semanticOverride = actualTextActive ? actualText.consume() : null;
             super.processTextPosition(text);
+            currentPage.accept(
+                    text,
+                    rawUnicode,
+                    malformedFontFallback,
+                    formDepth > 0,
+                    actualTextActive,
+                    semanticOverride);
+        }
+
+        private ActualTextFrame activeActualText() {
+            for (ActualTextFrame frame : actualTextFrames) {
+                if (frame.text() != null) {
+                    return frame;
+                }
+            }
+            return null;
         }
 
         @Override
@@ -202,11 +273,102 @@ public final class PdfTextLayerAuditor {
             currentPage = null;
             malformedFontFallback = false;
             fontSelectionFailed = false;
+            actualTextFrames.clear();
+            formDepth = 0;
             super.endPage(page);
         }
 
-        private List<PageAudit> pages() {
-            return pages.values().stream().map(MutablePage::freeze).toList();
+        private List<PageAudit> pages(PositionOrderCollector positionOrder) {
+            return pages.values().stream()
+                    .map(page -> page.freeze(positionOrder.text(page.pageNumber)))
+                    .toList();
+        }
+
+        private List<ParseDiagnostic> diagnostics() {
+            return pages.values().stream()
+                    .flatMap(page -> page.diagnostics.stream())
+                    .sorted(Comparator.comparingInt(ParseDiagnostic::pageNumber)
+                            .thenComparing(ParseDiagnostic::fontName)
+                            .thenComparing(diagnostic -> diagnostic.code().name()))
+                    .toList();
+        }
+    }
+
+    private static final class PositionOrderCollector extends PDFTextStripper {
+        private final Map<Integer, StringBuilder> pages = new LinkedHashMap<>();
+        private final Set<Integer> selectedPageNumbers;
+        private StringBuilder currentPage;
+
+        private PositionOrderCollector(List<Integer> selectedPages) {
+            selectedPageNumbers = Set.copyOf(selectedPages);
+            for (int pageNumber : selectedPages) {
+                pages.put(pageNumber, new StringBuilder());
+            }
+            setSortByPosition(true);
+            setSuppressDuplicateOverlappingText(false);
+        }
+
+        @Override
+        public void processPage(PDPage page) throws IOException {
+            if (selectedPageNumbers.contains(getCurrentPageNo())) {
+                super.processPage(page);
+            }
+        }
+
+        @Override
+        protected void startPage(PDPage page) throws IOException {
+            super.startPage(page);
+            currentPage = pages.get(getCurrentPageNo());
+        }
+
+        @Override
+        protected void writeString(String text) {
+            currentPage.append(text);
+        }
+
+        @Override
+        protected void operatorException(
+                Operator operator,
+                List<COSBase> operands,
+                IOException exception
+        ) throws IOException {
+            if (OperatorName.SET_FONT_AND_SIZE.equals(operator.getName())
+                    && PositionCollector.isRecoverableMalformedType0Font(exception)) {
+                getGraphicsState().getTextState().setFont(null);
+                return;
+            }
+            super.operatorException(operator, operands, exception);
+        }
+
+        @Override
+        protected void endPage(PDPage page) throws IOException {
+            currentPage = null;
+            super.endPage(page);
+        }
+
+        private String text(int pageNumber) {
+            return pages.get(pageNumber).toString();
+        }
+    }
+
+    private static final class ActualTextFrame {
+        private final String text;
+        private boolean consumed;
+
+        private ActualTextFrame(String text) {
+            this.text = text == null ? null : text.replace("\u00ad", "");
+        }
+
+        private String text() {
+            return text;
+        }
+
+        private String consume() {
+            if (consumed) {
+                return "";
+            }
+            consumed = true;
+            return text;
         }
     }
 
@@ -214,26 +376,65 @@ public final class PdfTextLayerAuditor {
         private final int pageNumber;
         private final float tinyTextThresholdPoints;
         private final Map<FontKey, MutableFont> fonts = new LinkedHashMap<>();
+        private final Set<COSDictionary> inspectedFonts =
+                Collections.newSetFromMap(new IdentityHashMap<>());
+        private final List<ParseDiagnostic> diagnostics = new ArrayList<>();
+        private final StringBuilder streamSemanticText = new StringBuilder();
         private int glyphCount;
         private int unicodeCharacterCount;
         private int missingUnicodeGlyphCount;
         private int replacementCharacterCount;
         private int tinyTextGlyphCount;
+        private int formXObjectGlyphCount;
+        private int actualTextGlyphCount;
+        private int actualTextCharacterCount;
+        private int rawMappedGlyphCount;
+        private int rawUnmappedGlyphCount;
+        private int actualTextResolvedGlyphCount;
+        private int malformedToUnicodeFontCount;
 
         private MutablePage(int pageNumber, float tinyTextThresholdPoints) {
             this.pageNumber = pageNumber;
             this.tinyTextThresholdPoints = tinyTextThresholdPoints;
         }
 
-        private void accept(TextPosition text, boolean mappingUntrusted) {
+        private void accept(
+                TextPosition text,
+                String rawUnicode,
+                boolean mappingUntrusted,
+                boolean inFormXObject,
+                boolean actualTextActive,
+                String semanticOverride
+        ) {
             glyphCount++;
+            if (inFormXObject) {
+                formXObjectGlyphCount++;
+            }
 
-            String unicode = text.getUnicode();
-            if (mappingUntrusted || hasMissingFontMapping(text, unicode)) {
+            boolean rawMappingMissing = mappingUntrusted
+                    || hasMissingFontMapping(text, rawUnicode);
+            if (rawMappingMissing) {
+                rawUnmappedGlyphCount++;
+            } else {
+                rawMappedGlyphCount++;
+            }
+            if (actualTextActive) {
+                actualTextGlyphCount++;
+                if (rawMappingMissing) {
+                    actualTextResolvedGlyphCount++;
+                }
+            } else if (rawMappingMissing) {
                 missingUnicodeGlyphCount++;
             }
+
+            String unicode = actualTextActive ? semanticOverride : rawUnicode;
             if (unicode != null && !unicode.isEmpty()) {
-                unicodeCharacterCount += unicode.codePointCount(0, unicode.length());
+                int semanticCharacters = unicode.codePointCount(0, unicode.length());
+                unicodeCharacterCount += semanticCharacters;
+                if (actualTextActive) {
+                    actualTextCharacterCount += semanticCharacters;
+                }
+                streamSemanticText.append(unicode);
                 replacementCharacterCount += (int) unicode.codePoints()
                         .filter(codePoint -> codePoint == 0xFFFD)
                         .count();
@@ -256,6 +457,44 @@ public final class PdfTextLayerAuditor {
                             embedded,
                             damaged));
             fontAudit.glyphCount++;
+        }
+
+        private void inspectFont(PDFont font) {
+            if (font == null || !inspectedFonts.add(font.getCOSObject())) {
+                return;
+            }
+            ParseDiagnosticCode diagnosticCode = inspectToUnicode(font.getCOSObject());
+            if (diagnosticCode != null) {
+                malformedToUnicodeFontCount++;
+                diagnostics.add(new ParseDiagnostic(
+                        diagnosticCode,
+                        pageNumber,
+                        displayName(font)));
+            }
+        }
+
+        private static ParseDiagnosticCode inspectToUnicode(COSDictionary fontDictionary) {
+            COSBase toUnicode = fontDictionary.getDictionaryObject(COSName.TO_UNICODE);
+            if (toUnicode == null) {
+                return null;
+            }
+            try {
+                CMap cmap;
+                if (toUnicode instanceof COSName name) {
+                    cmap = new CMapParser().parsePredefined(name.getName());
+                } else if (toUnicode instanceof COSStream stream) {
+                    try (RandomAccessRead input = stream.createView()) {
+                        cmap = new CMapParser().parse(input);
+                    }
+                } else {
+                    return ParseDiagnosticCode.MALFORMED_TOUNICODE_CMAP;
+                }
+                return cmap.hasUnicodeMappings()
+                        ? null
+                        : ParseDiagnosticCode.INVALID_TOUNICODE_CMAP;
+            } catch (IOException | RuntimeException exception) {
+                return ParseDiagnosticCode.MALFORMED_TOUNICODE_CMAP;
+            }
         }
 
         private static boolean hasMissingFontMapping(
@@ -287,7 +526,7 @@ public final class PdfTextLayerAuditor {
             return name == null || name.isBlank() ? "<unnamed>" : name;
         }
 
-        private PageAudit freeze() {
+        private PageAudit freeze(String positionText) {
             List<Finding> findings = new ArrayList<>();
             if (glyphCount == 0) {
                 findings.add(Finding.NO_TEXT_LAYER);
@@ -300,6 +539,23 @@ public final class PdfTextLayerAuditor {
             }
             if (tinyTextGlyphCount > 0) {
                 findings.add(Finding.TINY_TEXT);
+            }
+            if (diagnostics.stream().anyMatch(
+                    diagnostic -> diagnostic.code()
+                            == ParseDiagnosticCode.MALFORMED_TOUNICODE_CMAP)) {
+                findings.add(Finding.MALFORMED_TOUNICODE_CMAP);
+            }
+            if (diagnostics.stream().anyMatch(
+                    diagnostic -> diagnostic.code()
+                            == ParseDiagnosticCode.INVALID_TOUNICODE_CMAP)) {
+                findings.add(Finding.INVALID_TOUNICODE_CMAP);
+            }
+
+            String canonicalStreamText = canonicalReadingOrderText(streamSemanticText.toString());
+            String canonicalPositionText = canonicalReadingOrderText(positionText);
+            boolean readingOrderDiverges = !canonicalStreamText.equals(canonicalPositionText);
+            if (readingOrderDiverges) {
+                findings.add(Finding.READING_ORDER_DIVERGENCE);
             }
 
             List<FontAudit> fontAudits = fonts.values().stream()
@@ -316,9 +572,35 @@ public final class PdfTextLayerAuditor {
                     missingUnicodeGlyphCount,
                     replacementCharacterCount,
                     tinyTextGlyphCount,
+                    PageClassification.UNKNOWN,
+                    new TextSurfaceAudit(
+                            glyphCount - formXObjectGlyphCount,
+                            formXObjectGlyphCount,
+                            actualTextGlyphCount,
+                            actualTextCharacterCount),
+                    new SemanticMappingAudit(
+                            rawMappedGlyphCount,
+                            rawUnmappedGlyphCount,
+                            actualTextResolvedGlyphCount,
+                            malformedToUnicodeFontCount),
+                    new ReadingOrderAudit(
+                            true,
+                            readingOrderDiverges,
+                            canonicalStreamText.codePointCount(0, canonicalStreamText.length()),
+                            canonicalPositionText.codePointCount(0, canonicalPositionText.length())),
+                    GeometryVisibilityAudit.unassessed(),
                     fontAudits,
                     findings);
         }
+    }
+
+    private static String canonicalReadingOrderText(String text) {
+        StringBuilder canonical = new StringBuilder(text.length());
+        text.codePoints()
+                .filter(codePoint -> !Character.isWhitespace(codePoint)
+                        && !Character.isSpaceChar(codePoint))
+                .forEach(canonical::appendCodePoint);
+        return canonical.toString();
     }
 
     static boolean isUsableUnicode(String unicode) {

@@ -19,6 +19,11 @@ public final class TextReportPrinter {
                     "Tiny text threshold: %.2f pt%n",
                     report.tinyTextThresholdPoints());
         }
+        out.println("Parse complete: " + report.parseHealth().complete());
+        out.println("Parse recovered: " + report.parseHealth().recovered());
+        out.println("Typed parse diagnostics: " + report.parseHealth().diagnostics().size());
+        out.println("Evidence complete for direct routing: "
+                + report.completeness().completeForDirectRouting());
         out.println();
 
         for (PageAudit page : report.pages()) {
@@ -31,6 +36,24 @@ public final class TextReportPrinter {
                     page.unicodeCharacterCount(),
                     fontCount,
                     fontCount == 1 ? "font" : "fonts");
+            out.println("  Classification: " + page.classification());
+            out.printf(
+                    Locale.ROOT,
+                    "  Text surfaces: page=%d, forms=%d, ActualText glyphs=%d%n",
+                    page.textSurfaces().pageContentGlyphCount(),
+                    page.textSurfaces().formXObjectGlyphCount(),
+                    page.textSurfaces().actualTextGlyphCount());
+            out.printf(
+                    Locale.ROOT,
+                    "  Raw Unicode mapping: mapped=%d, unmapped=%d, ActualText-resolved=%d%n",
+                    page.semanticMapping().rawMappedGlyphCount(),
+                    page.semanticMapping().rawUnmappedGlyphCount(),
+                    page.semanticMapping().actualTextResolvedGlyphCount());
+            out.printf(
+                    Locale.ROOT,
+                    "  Reading order: assessed=%s, diverges=%s%n",
+                    page.readingOrder().assessed(),
+                    page.readingOrder().diverges());
 
             for (FontAudit font : page.fonts()) {
                 out.printf(
@@ -43,7 +66,7 @@ public final class TextReportPrinter {
             }
 
             if (page.findings().isEmpty()) {
-                out.println("  OK: no basic text-layer problems detected");
+                out.println("  OK: no problems found in the assessed evidence");
             } else {
                 for (Finding finding : page.findings()) {
                     out.printf("  WARN %s: %s%n", finding.name(), finding.description());

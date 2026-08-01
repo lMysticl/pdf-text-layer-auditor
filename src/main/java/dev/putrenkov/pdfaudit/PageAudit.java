@@ -9,12 +9,64 @@ public record PageAudit(
         int missingUnicodeGlyphCount,
         int replacementCharacterCount,
         int tinyTextGlyphCount,
+        PageClassification classification,
+        TextSurfaceAudit textSurfaces,
+        SemanticMappingAudit semanticMapping,
+        ReadingOrderAudit readingOrder,
+        GeometryVisibilityAudit geometryVisibility,
         List<FontAudit> fonts,
         List<Finding> findings
 ) {
     public PageAudit {
+        if (pageNumber < 1
+                || glyphCount < 0
+                || unicodeCharacterCount < 0
+                || missingUnicodeGlyphCount < 0
+                || replacementCharacterCount < 0
+                || tinyTextGlyphCount < 0) {
+            throw new IllegalArgumentException("Page audit counters are invalid");
+        }
+        java.util.Objects.requireNonNull(classification, "classification");
+        java.util.Objects.requireNonNull(textSurfaces, "textSurfaces");
+        java.util.Objects.requireNonNull(semanticMapping, "semanticMapping");
+        java.util.Objects.requireNonNull(readingOrder, "readingOrder");
+        java.util.Objects.requireNonNull(geometryVisibility, "geometryVisibility");
         fonts = List.copyOf(fonts);
         findings = List.copyOf(findings);
+    }
+
+    public PageAudit(
+            int pageNumber,
+            int glyphCount,
+            int unicodeCharacterCount,
+            int missingUnicodeGlyphCount,
+            int replacementCharacterCount,
+            int tinyTextGlyphCount,
+            List<FontAudit> fonts,
+            List<Finding> findings
+    ) {
+        this(
+                pageNumber,
+                glyphCount,
+                unicodeCharacterCount,
+                missingUnicodeGlyphCount,
+                replacementCharacterCount,
+                tinyTextGlyphCount,
+                PageClassification.UNKNOWN,
+                new TextSurfaceAudit(glyphCount, 0, 0, 0),
+                new SemanticMappingAudit(
+                        Math.max(0, glyphCount - missingUnicodeGlyphCount),
+                        missingUnicodeGlyphCount,
+                        0,
+                        0),
+                new ReadingOrderAudit(
+                        false,
+                        false,
+                        unicodeCharacterCount,
+                        unicodeCharacterCount),
+                GeometryVisibilityAudit.unassessed(),
+                fonts,
+                findings);
     }
 
     public boolean needsAttention() {

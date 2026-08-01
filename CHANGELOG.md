@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Introduce report schema v2 with explicit parse health, evidence completeness,
+  text-surface, semantic-mapping, reading-order, and geometry-assessment fields.
+- Treat valid marked-content `/ActualText` as semantic text while preserving
+  the underlying raw Unicode-mapping provenance.
+- Convert malformed or empty declared `/ToUnicode` CMaps into stable typed
+  diagnostics and page findings instead of relying on PDFBox log output.
+- Detect character-sequence divergence between content-stream and
+  position-sorted extraction without retaining extracted document text.
+- Keep report and GitHub Action schemas v1 published for existing consumers.
+
 ## 0.5.4 — 2026-08-01
 
 - Validate ToUnicode destinations across representative writing systems,
