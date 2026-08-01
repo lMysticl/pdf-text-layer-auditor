@@ -239,7 +239,8 @@ instead of an unrestricted heap cache.
 Each document is also bounded to 1,000,000 text glyphs, 5,000,000 semantic
 Unicode characters, 10,000 fonts, 100,000 images, 1,000,000 painted vector
 paths, 100,000 annotations, 100,000 annotation appearance streams, and 100,000
-optional-content references. These internal safety limits are deliberately not
+optional-content references, and 100,000 document-level surface entries. These
+internal safety limits are deliberately not
 CLI-tunable. Exceeding one produces exit code `2` and a stable
 `pdfTextLayerAuditorFailure=WORK_LIMIT_<TYPE>` stderr marker; it does not mean
 that the document's text layer was found invalid.
@@ -284,6 +285,10 @@ These limits reduce accidental resource use but do not sandbox the PDF parser. P
 - Normal, rollover, and down annotation appearance streams are checked
   separately from page text. Form values without a generated appearance stream
   cannot be inferred from the field value alone.
+- AcroForm/XFA fields, signatures, embedded-file name trees, catalog-associated
+  files, and PDF portfolios are inventoried at document level. Their presence
+  is profile-dependent evidence: the auditor does not silently merge form
+  values or attachment contents into page text.
 - OCG/OCMD visibility is evaluated for View, Print, and Export. A malformed,
   cyclic, or unsupported visibility expression makes `optionalContent=false`
   in the document completeness object instead of being guessed clean.

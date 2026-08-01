@@ -20,7 +20,8 @@ public final class AuditWorkLimitException extends IllegalArgumentException {
         PAINTED_VECTOR_PATH_COUNT("painted-vector-path-count"),
         ANNOTATION_COUNT("annotation-count"),
         ANNOTATION_APPEARANCE_STREAM_COUNT("annotation-appearance-stream-count"),
-        OPTIONAL_CONTENT_REFERENCE_COUNT("optional-content-reference-count");
+        OPTIONAL_CONTENT_REFERENCE_COUNT("optional-content-reference-count"),
+        DOCUMENT_SURFACE_COUNT("document-surface-count");
 
         private final String label;
 

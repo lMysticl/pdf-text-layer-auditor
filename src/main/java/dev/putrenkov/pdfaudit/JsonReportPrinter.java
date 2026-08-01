@@ -28,6 +28,7 @@ public final class JsonReportPrinter {
                 report.tinyTextThresholdPoints());
         appendParseHealth(json, report.parseHealth());
         appendCompleteness(json, report.completeness());
+        appendDocumentSurfaces(json, report.documentSurfaces());
         appendBooleanProperty(json, "needsAttention", report.needsAttention());
         appendNumberProperty(json, "pagesNeedingAttention", report.pagesNeedingAttention());
         json.append(",\"pages\":[");
@@ -76,6 +77,30 @@ public final class JsonReportPrinter {
         appendBooleanProperty(json, "geometryVisibility", completeness.geometryVisibility());
         appendBooleanProperty(json, "annotations", completeness.annotations());
         appendBooleanProperty(json, "optionalContent", completeness.optionalContent());
+        json.append('}');
+    }
+
+    private static void appendDocumentSurfaces(
+            StringBuilder json,
+            DocumentSurfaceAudit surfaces
+    ) {
+        appendPropertyPrefix(json, "documentSurfaces");
+        json.append('{');
+        appendBooleanProperty(json, "assessed", surfaces.assessed());
+        appendBooleanProperty(json, "complete", surfaces.complete());
+        appendNullableNumberProperty(json, "acroFormFieldCount", surfaces.acroFormFieldCount());
+        appendNullableNumberProperty(json, "signatureFieldCount", surfaces.signatureFieldCount());
+        appendNullableNumberProperty(
+                json,
+                "widgetWithoutAppearanceCount",
+                surfaces.widgetWithoutAppearanceCount());
+        appendNullableBooleanProperty(json, "xfaPresent", surfaces.xfaPresent());
+        appendNullableNumberProperty(json, "embeddedFileCount", surfaces.embeddedFileCount());
+        appendNullableNumberProperty(
+                json,
+                "associatedFileReferenceCount",
+                surfaces.associatedFileReferenceCount());
+        appendNullableBooleanProperty(json, "portfolioPresent", surfaces.portfolioPresent());
         json.append('}');
     }
 

@@ -12,6 +12,7 @@ public record AuditReport(
         float tinyTextThresholdPoints,
         ParseHealth parseHealth,
         EvidenceCompleteness completeness,
+        DocumentSurfaceAudit documentSurfaces,
         List<PageAudit> pages
 ) {
     public AuditReport {
@@ -21,6 +22,7 @@ public record AuditReport(
         }
         java.util.Objects.requireNonNull(parseHealth, "parseHealth");
         java.util.Objects.requireNonNull(completeness, "completeness");
+        java.util.Objects.requireNonNull(documentSurfaces, "documentSurfaces");
         pages = List.copyOf(pages);
     }
 
@@ -42,6 +44,7 @@ public record AuditReport(
                 tinyTextThresholdPoints,
                 new ParseHealth(true, false, 0, List.of()),
                 EvidenceCompleteness.phaseZero(),
+                DocumentSurfaceAudit.unassessed(),
                 pages);
     }
 
@@ -50,6 +53,9 @@ public record AuditReport(
     }
 
     public boolean needsAttention() {
-        return parseHealth.recovered() || !parseHealth.complete() || pagesNeedingAttention() > 0;
+        return parseHealth.recovered()
+                || !parseHealth.complete()
+                || documentSurfaces.requiresProfile()
+                || pagesNeedingAttention() > 0;
     }
 }

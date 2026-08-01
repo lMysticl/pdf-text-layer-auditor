@@ -19,6 +19,7 @@ import org.apache.pdfbox.cos.COSFloat;
 import org.apache.pdfbox.cos.COSInteger;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSStream;
+import org.apache.pdfbox.cos.COSString;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -563,6 +564,84 @@ class PdfTextLayerAuditorTest {
     }
 
     @Test
+    void auditsFormsSignaturesAttachmentsAssociatedFilesAndPortfolios()
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("document-surfaces.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            addHelveticaText(document, page, "page text", 72, 720);
+
+            COSDictionary acroForm = new COSDictionary();
+            COSArray fields = new COSArray();
+            COSDictionary widget = new COSDictionary();
+            widget.setItem(COSName.FT, COSName.getPDFName("Tx"));
+            widget.setItem(COSName.SUBTYPE, COSName.WIDGET);
+            fields.add(widget);
+            COSDictionary signature = new COSDictionary();
+            signature.setItem(COSName.FT, COSName.getPDFName("Sig"));
+            fields.add(signature);
+            acroForm.setItem(COSName.FIELDS, fields);
+            acroForm.setItem(COSName.getPDFName("XFA"), new COSString("template"));
+            document.getDocumentCatalog().getCOSObject().setItem(
+                    COSName.getPDFName("AcroForm"), acroForm);
+
+            COSDictionary fileSpecification = new COSDictionary();
+            fileSpecification.setItem(COSName.TYPE, COSName.FILESPEC);
+            COSArray embeddedNames = new COSArray();
+            embeddedNames.add(new COSString("payload.txt"));
+            embeddedNames.add(fileSpecification);
+            COSDictionary embeddedFiles = new COSDictionary();
+            embeddedFiles.setItem(COSName.NAMES, embeddedNames);
+            COSDictionary names = new COSDictionary();
+            names.setItem(COSName.getPDFName("EmbeddedFiles"), embeddedFiles);
+            document.getDocumentCatalog().getCOSObject().setItem(COSName.NAMES, names);
+            document.getDocumentCatalog().getCOSObject().setItem(
+                    COSName.getPDFName("AF"), new COSArray(List.of(fileSpecification)));
+            document.getDocumentCatalog().getCOSObject().setItem(
+                    COSName.getPDFName("Collection"), new COSDictionary());
+            document.save(pdf.toFile());
+        }
+
+        AuditReport report = new PdfTextLayerAuditor().audit(pdf);
+        DocumentSurfaceAudit surfaces = report.documentSurfaces();
+
+        assertTrue(surfaces.assessed());
+        assertTrue(surfaces.complete());
+        assertEquals(2, surfaces.acroFormFieldCount());
+        assertEquals(1, surfaces.signatureFieldCount());
+        assertEquals(1, surfaces.widgetWithoutAppearanceCount());
+        assertTrue(surfaces.xfaPresent());
+        assertEquals(1, surfaces.embeddedFileCount());
+        assertEquals(1, surfaces.associatedFileReferenceCount());
+        assertTrue(surfaces.portfolioPresent());
+        assertTrue(surfaces.requiresProfile());
+        assertTrue(report.needsAttention());
+    }
+
+    @Test
+    void marksCyclicEmbeddedFileNameTreeIncomplete() throws IOException {
+        Path pdf = temporaryDirectory.resolve("cyclic-embedded-names.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            addHelveticaText(document, page, "page text", 72, 720);
+            COSDictionary embeddedFiles = new COSDictionary();
+            embeddedFiles.setItem(COSName.KIDS, new COSArray(List.of(embeddedFiles)));
+            COSDictionary names = new COSDictionary();
+            names.setItem(COSName.getPDFName("EmbeddedFiles"), embeddedFiles);
+            document.getDocumentCatalog().getCOSObject().setItem(COSName.NAMES, names);
+            document.save(pdf.toFile());
+        }
+
+        DocumentSurfaceAudit surfaces =
+                new PdfTextLayerAuditor().audit(pdf).documentSurfaces();
+
+        assertFalse(surfaces.complete());
+        assertTrue(surfaces.requiresProfile());
+    }
+
+    @Test
     void enforcesGlyphSemanticCharacterAndFontBudgets() throws IOException {
         Path glyphs = temporaryDirectory.resolve("too-many-glyphs.pdf");
         try (PDDocument document = new PDDocument()) {
@@ -702,6 +781,23 @@ class PdfTextLayerAuditorTest {
                 optional,
                 new AuditWorkLimits(10, 10, 10, 10, 10, 10, 10, 1),
                 AuditWorkLimitException.Code.OPTIONAL_CONTENT_REFERENCE_COUNT);
+
+        Path documentSurfaces = temporaryDirectory.resolve("too-many-document-surfaces.pdf");
+        try (PDDocument document = new PDDocument()) {
+            document.addPage(new PDPage());
+            COSDictionary acroForm = new COSDictionary();
+            COSArray fields = new COSArray();
+            fields.add(new COSDictionary());
+            fields.add(new COSDictionary());
+            acroForm.setItem(COSName.FIELDS, fields);
+            document.getDocumentCatalog().getCOSObject().setItem(
+                    COSName.getPDFName("AcroForm"), acroForm);
+            document.save(documentSurfaces.toFile());
+        }
+        assertWorkLimit(
+                documentSurfaces,
+                new AuditWorkLimits(10, 10, 10, 10, 10, 10, 10, 10, 1),
+                AuditWorkLimitException.Code.DOCUMENT_SURFACE_COUNT);
     }
 
     @Test
