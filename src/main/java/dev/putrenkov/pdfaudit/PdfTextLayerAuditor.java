@@ -141,6 +141,8 @@ public final class PdfTextLayerAuditor {
             positionOrder.writeText(document, Writer.nullWriter());
             Map<Integer, PageVisualAnalyzer.PageEvidence> visualEvidence =
                     PageVisualAnalyzer.analyze(document, selectedPages, workLimits);
+            DocumentSurfaceAudit documentSurfaces =
+                    DocumentSurfaceAnalyzer.analyze(document, workLimits);
 
             List<ParseDiagnostic> diagnostics = collector.diagnostics();
             int parserWarningCount = parserDiagnostics.warningCount();
@@ -159,6 +161,7 @@ public final class PdfTextLayerAuditor {
                             diagnostics),
                     EvidenceCompleteness.phaseTwo(visualEvidence.values().stream()
                             .allMatch(evidence -> evidence.optionalContent().complete())),
+                    documentSurfaces,
                     collector.pages(positionOrder, visualEvidence));
         }
     }

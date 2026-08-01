@@ -15,6 +15,7 @@
     "tinyTextThresholdPoints",
     "parseHealth",
     "completeness",
+    "documentSurfaces",
     "needsAttention",
     "pagesNeedingAttention",
     "pages"
@@ -30,6 +31,7 @@
     "tinyTextThresholdPoints": { "type": "number", "minimum": 0 },
     "parseHealth": { "$ref": "#/$defs/parseHealth" },
     "completeness": { "$ref": "#/$defs/completeness" },
+    "documentSurfaces": { "$ref": "#/$defs/documentSurfaces" },
     "needsAttention": { "type": "boolean" },
     "pagesNeedingAttention": { "type": "integer", "minimum": 0 },
     "pages": {
@@ -85,6 +87,26 @@
         "geometryVisibility": { "type": "boolean" },
         "annotations": { "type": "boolean" },
         "optionalContent": { "type": "boolean" }
+      }
+    },
+    "documentSurfaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessed", "complete", "acroFormFieldCount", "signatureFieldCount",
+        "widgetWithoutAppearanceCount", "xfaPresent", "embeddedFileCount",
+        "associatedFileReferenceCount", "portfolioPresent"
+      ],
+      "properties": {
+        "assessed": { "type": "boolean" },
+        "complete": { "type": "boolean" },
+        "acroFormFieldCount": { "type": ["integer", "null"], "minimum": 0 },
+        "signatureFieldCount": { "type": ["integer", "null"], "minimum": 0 },
+        "widgetWithoutAppearanceCount": { "type": ["integer", "null"], "minimum": 0 },
+        "xfaPresent": { "type": ["boolean", "null"] },
+        "embeddedFileCount": { "type": ["integer", "null"], "minimum": 0 },
+        "associatedFileReferenceCount": { "type": ["integer", "null"], "minimum": 0 },
+        "portfolioPresent": { "type": ["boolean", "null"] }
       }
     },
     "page": {

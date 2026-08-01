@@ -25,6 +25,17 @@ public final class TextReportPrinter {
         out.println("Typed parse diagnostics: " + report.parseHealth().diagnostics().size());
         out.println("Evidence complete for direct routing: "
                 + report.completeness().completeForDirectRouting());
+        DocumentSurfaceAudit surfaces = report.documentSurfaces();
+        out.printf(
+                Locale.ROOT,
+                "Document surfaces: complete=%s, form fields=%s, signatures=%s, embedded files=%s, associated files=%s, XFA=%s, portfolio=%s%n",
+                surfaces.complete(),
+                surfaces.acroFormFieldCount(),
+                surfaces.signatureFieldCount(),
+                surfaces.embeddedFileCount(),
+                surfaces.associatedFileReferenceCount(),
+                surfaces.xfaPresent(),
+                surfaces.portfolioPresent());
         out.println();
 
         for (PageAudit page : report.pages()) {
@@ -88,6 +99,8 @@ public final class TextReportPrinter {
                     inspectedPageCount == 1 ? "needs" : "need");
         } else if (report.parseHealth().recovered() || !report.parseHealth().complete()) {
             out.println("Result: document parsing requires review");
+        } else if (report.documentSurfaces().requiresProfile()) {
+            out.println("Result: document-level surfaces require a downstream profile");
         } else {
             out.println("Result: no inspected text-layer problems were found");
         }
