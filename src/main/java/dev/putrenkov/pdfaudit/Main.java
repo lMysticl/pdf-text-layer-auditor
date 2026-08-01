@@ -21,8 +21,18 @@ public final class Main {
     }
 
     static int run(String[] args, PrintStream out, PrintStream err) {
+        return run(args, out, err, AuditWorkLimits.defaults());
+    }
+
+    static int run(
+            String[] args,
+            PrintStream out,
+            PrintStream err,
+            AuditWorkLimits workLimits
+    ) {
         Objects.requireNonNull(out, "out");
         Objects.requireNonNull(err, "err");
+        Objects.requireNonNull(workLimits, "workLimits");
 
         CliOptions options;
         try {
@@ -46,7 +56,8 @@ public final class Main {
             AuditReport report = new PdfTextLayerAuditor(
                     options.maxFileSizeBytes(),
                     options.maxPageCount(),
-                    options.tinyTextThresholdPoints())
+                    options.tinyTextThresholdPoints(),
+                    workLimits)
                     .audit(options.input(), options.pageSelection());
             if (options.outputFormat() == CliOptions.OutputFormat.JSON) {
                 new JsonReportPrinter().print(report, out);
@@ -56,6 +67,10 @@ public final class Main {
             return completeOutput(out, err, report.needsAttention() ? 1 : 0);
         } catch (InvalidPasswordException exception) {
             err.println("Cannot audit a password-protected PDF without a password.");
+            return 2;
+        } catch (AuditWorkLimitException exception) {
+            err.println("pdfTextLayerAuditorFailure=WORK_LIMIT_" + exception.code());
+            err.println(TerminalText.escape(exception.getMessage()));
             return 2;
         } catch (IllegalArgumentException | SecurityException exception) {
             err.println(TerminalText.escape(exception.getMessage()));

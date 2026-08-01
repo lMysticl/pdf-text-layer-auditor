@@ -12,8 +12,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -131,6 +134,50 @@ class MainTest {
         assertEquals(
                 "PDF permissions do not allow text extraction",
                 result.stderr().trim());
+    }
+
+    @Test
+    void workLimitFailureHasStableMachineReadableMarker() throws IOException {
+        Path pdf = temporaryDirectory.resolve("two-glyphs.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                content.showText("AB");
+                content.endText();
+            }
+            document.save(pdf.toFile());
+        }
+        AuditWorkLimits defaults = AuditWorkLimits.defaults();
+        ByteArrayOutputStream capturedOutput = new ByteArrayOutputStream();
+        ByteArrayOutputStream capturedError = new ByteArrayOutputStream();
+        int exitCode;
+        try (PrintStream output = new PrintStream(capturedOutput, true, StandardCharsets.UTF_8);
+                PrintStream error = new PrintStream(capturedError, true, StandardCharsets.UTF_8)) {
+            exitCode = Main.run(
+                    new String[] {pdf.toString()},
+                    output,
+                    error,
+                    new AuditWorkLimits(
+                            1,
+                            defaults.maximumSemanticCharacterCount(),
+                            defaults.maximumFontCount(),
+                            defaults.maximumImageCount(),
+                            defaults.maximumPaintedVectorPathCount(),
+                            defaults.maximumAnnotationCount(),
+                            defaults.maximumAnnotationAppearanceStreamCount(),
+                            defaults.maximumOptionalContentReferenceCount()));
+        }
+
+        assertEquals(2, exitCode);
+        assertTrue(capturedOutput.toString(StandardCharsets.UTF_8).isEmpty());
+        assertEquals(
+                "pdfTextLayerAuditorFailure=WORK_LIMIT_GLYPH_COUNT"
+                        + System.lineSeparator()
+                        + "PDF exceeds the configured glyph-count limit of 1",
+                capturedError.toString(StandardCharsets.UTF_8).trim());
     }
 
     @Test

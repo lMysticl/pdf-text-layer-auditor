@@ -40,22 +40,41 @@ public final class PdfTextLayerAuditor {
     private final long maxFileSizeBytes;
     private final int maxPageCount;
     private final float tinyTextThresholdPoints;
+    private final AuditWorkLimits workLimits;
 
     public PdfTextLayerAuditor() {
         this(
                 DEFAULT_MAX_FILE_SIZE_BYTES,
                 DEFAULT_MAX_PAGE_COUNT,
-                DEFAULT_TINY_TEXT_THRESHOLD_POINTS);
+                DEFAULT_TINY_TEXT_THRESHOLD_POINTS,
+                AuditWorkLimits.defaults());
     }
 
     public PdfTextLayerAuditor(long maxFileSizeBytes, int maxPageCount) {
-        this(maxFileSizeBytes, maxPageCount, DEFAULT_TINY_TEXT_THRESHOLD_POINTS);
+        this(
+                maxFileSizeBytes,
+                maxPageCount,
+                DEFAULT_TINY_TEXT_THRESHOLD_POINTS,
+                AuditWorkLimits.defaults());
     }
 
     public PdfTextLayerAuditor(
             long maxFileSizeBytes,
             int maxPageCount,
             float tinyTextThresholdPoints
+    ) {
+        this(
+                maxFileSizeBytes,
+                maxPageCount,
+                tinyTextThresholdPoints,
+                AuditWorkLimits.defaults());
+    }
+
+    public PdfTextLayerAuditor(
+            long maxFileSizeBytes,
+            int maxPageCount,
+            float tinyTextThresholdPoints,
+            AuditWorkLimits workLimits
     ) {
         if (maxFileSizeBytes <= 0) {
             throw new IllegalArgumentException("maxFileSizeBytes must be positive");
@@ -70,6 +89,7 @@ public final class PdfTextLayerAuditor {
         this.maxFileSizeBytes = maxFileSizeBytes;
         this.maxPageCount = maxPageCount;
         this.tinyTextThresholdPoints = tinyTextThresholdPoints;
+        this.workLimits = java.util.Objects.requireNonNull(workLimits, "workLimits");
     }
 
     public AuditReport audit(Path input) throws IOException {
@@ -111,12 +131,15 @@ public final class PdfTextLayerAuditor {
             List<Integer> selectedPages = pageSelection.resolve(pageCount);
             PositionCollector collector = new PositionCollector(
                     selectedPages,
-                    tinyTextThresholdPoints);
+                    tinyTextThresholdPoints,
+                    workLimits);
             collector.writeText(document, Writer.nullWriter());
-            PositionOrderCollector positionOrder = new PositionOrderCollector(selectedPages);
+            PositionOrderCollector positionOrder = new PositionOrderCollector(
+                    selectedPages,
+                    workLimits);
             positionOrder.writeText(document, Writer.nullWriter());
             Map<Integer, PageVisualAnalyzer.PageEvidence> visualEvidence =
-                    PageVisualAnalyzer.analyze(document, selectedPages);
+                    PageVisualAnalyzer.analyze(document, selectedPages, workLimits);
 
             List<ParseDiagnostic> diagnostics = collector.diagnostics();
 
@@ -142,11 +165,16 @@ public final class PdfTextLayerAuditor {
         private boolean malformedFontFallback;
         private boolean fontSelectionFailed;
         private int formDepth;
+        private final AuditWorkLimits workLimits;
+        private long totalGlyphCount;
+        private long totalSemanticCharacterCount;
 
         private PositionCollector(
                 List<Integer> selectedPages,
-                float tinyTextThresholdPoints
+                float tinyTextThresholdPoints,
+                AuditWorkLimits workLimits
         ) {
+            this.workLimits = workLimits;
             selectedPageNumbers = Set.copyOf(selectedPages);
             for (int pageNumber : selectedPages) {
                 pages.put(
@@ -248,10 +276,27 @@ public final class PdfTextLayerAuditor {
 
         @Override
         protected void processTextPosition(TextPosition text) {
+            totalGlyphCount++;
+            if (totalGlyphCount > workLimits.maximumGlyphCount()) {
+                throw new AuditWorkLimitException(
+                        AuditWorkLimitException.Code.GLYPH_COUNT,
+                        workLimits.maximumGlyphCount());
+            }
             String rawUnicode = text.getUnicode();
             ActualTextFrame actualText = activeActualText();
             boolean actualTextActive = actualText != null;
             String semanticOverride = actualTextActive ? actualText.consume() : null;
+            String semanticText = actualTextActive ? semanticOverride : rawUnicode;
+            if (semanticText != null) {
+                totalSemanticCharacterCount +=
+                        semanticText.codePointCount(0, semanticText.length());
+                if (totalSemanticCharacterCount
+                        > workLimits.maximumSemanticCharacterCount()) {
+                    throw new AuditWorkLimitException(
+                            AuditWorkLimitException.Code.SEMANTIC_CHARACTER_COUNT,
+                            workLimits.maximumSemanticCharacterCount());
+                }
+            }
             super.processTextPosition(text);
             currentPage.accept(
                     text,
@@ -259,7 +304,8 @@ public final class PdfTextLayerAuditor {
                     malformedFontFallback,
                     formDepth > 0,
                     actualTextActive,
-                    semanticOverride);
+                    semanticOverride,
+                    workLimits);
         }
 
         private ActualTextFrame activeActualText() {
@@ -305,9 +351,15 @@ public final class PdfTextLayerAuditor {
     private static final class PositionOrderCollector extends PDFTextStripper {
         private final Map<Integer, StringBuilder> pages = new LinkedHashMap<>();
         private final Set<Integer> selectedPageNumbers;
+        private final AuditWorkLimits workLimits;
+        private long semanticCharacterCount;
         private StringBuilder currentPage;
 
-        private PositionOrderCollector(List<Integer> selectedPages) {
+        private PositionOrderCollector(
+                List<Integer> selectedPages,
+                AuditWorkLimits workLimits
+        ) {
+            this.workLimits = workLimits;
             selectedPageNumbers = Set.copyOf(selectedPages);
             for (int pageNumber : selectedPages) {
                 pages.put(pageNumber, new StringBuilder());
@@ -331,6 +383,12 @@ public final class PdfTextLayerAuditor {
 
         @Override
         protected void writeString(String text) {
+            semanticCharacterCount += text.codePointCount(0, text.length());
+            if (semanticCharacterCount > workLimits.maximumSemanticCharacterCount()) {
+                throw new AuditWorkLimitException(
+                        AuditWorkLimitException.Code.SEMANTIC_CHARACTER_COUNT,
+                        workLimits.maximumSemanticCharacterCount());
+            }
             currentPage.append(text);
         }
 
@@ -419,7 +477,8 @@ public final class PdfTextLayerAuditor {
                 boolean mappingUntrusted,
                 boolean inFormXObject,
                 boolean actualTextActive,
-                String semanticOverride
+                String semanticOverride,
+                AuditWorkLimits workLimits
         ) {
             glyphCount++;
             if (inFormXObject) {
@@ -477,9 +536,14 @@ public final class PdfTextLayerAuditor {
                     descriptor.vertical(),
                     descriptor.toUnicodePresent(),
                     descriptor.subset());
-            MutableFont fontAudit = fonts.computeIfAbsent(
-                    key,
-                    ignored -> new MutableFont(
+            MutableFont fontAudit = fonts.get(key);
+            if (fontAudit == null) {
+                if (fonts.size() >= workLimits.maximumFontCount()) {
+                    throw new AuditWorkLimitException(
+                            AuditWorkLimitException.Code.FONT_COUNT,
+                            workLimits.maximumFontCount());
+                }
+                fontAudit = new MutableFont(
                             fontName,
                             descriptor.subtype(),
                             descriptor.encoding(),
@@ -487,7 +551,9 @@ public final class PdfTextLayerAuditor {
                             damaged,
                             descriptor.vertical(),
                             descriptor.toUnicodePresent(),
-                            descriptor.subset()));
+                            descriptor.subset());
+                fonts.put(key, fontAudit);
+            }
             fontAudit.glyphCount++;
             if (rawMappingMissing) {
                 fontAudit.rawUnmappedGlyphCount++;

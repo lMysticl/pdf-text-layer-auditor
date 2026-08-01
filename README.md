@@ -234,6 +234,14 @@ The default audit rejects files larger than 100 MiB and documents with more than
 and 500 MiB of PDF input in total. Temporary PDF streams are buffered on disk
 instead of an unrestricted heap cache.
 
+Each document is also bounded to 1,000,000 text glyphs, 5,000,000 semantic
+Unicode characters, 10,000 fonts, 100,000 images, 1,000,000 painted vector
+paths, 100,000 annotations, 100,000 annotation appearance streams, and 100,000
+optional-content references. These internal safety limits are deliberately not
+CLI-tunable. Exceeding one produces exit code `2` and a stable
+`pdfTextLayerAuditorFailure=WORK_LIMIT_<TYPE>` stderr marker; it does not mean
+that the document's text layer was found invalid.
+
 Controlled environments can override either limit:
 
 ```bash
@@ -264,6 +272,7 @@ These limits reduce accidental resource use but do not sandbox the PDF parser. P
   cyclic, or unsupported visibility expression makes `optionalContent=false`
   in the document completeness object instead of being guessed clean.
 - Password-protected PDFs are not supported.
+- Documents that exceed an internal work budget stop without a partial report.
 - Results are diagnostics, not PDF/UA or accessibility certification.
 
 ## Development
