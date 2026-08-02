@@ -17,7 +17,7 @@ class JsonReportPrinterTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
-    void serializesCompleteVersionTwoReportAndEscapesStrings() throws Exception {
+    void serializesCompleteVersionThreeReportAndEscapesStrings() throws Exception {
         PageAudit page = new PageAudit(
                 1,
                 4,
@@ -39,7 +39,7 @@ class JsonReportPrinterTest {
         String json = JsonReportPrinter.toJson(report);
         var root = MAPPER.readTree(json);
 
-        assertEquals(2, root.path("schemaVersion").asInt());
+        assertEquals(3, root.path("schemaVersion").asInt());
         assertEquals("A\"B\\C\n\u0001\uD83D\uDE00",
                 root.path("pages").path(0).path("fonts").path(0).path("name").asText());
         assertTrue(root.path("parseHealth").path("complete").asBoolean());
@@ -47,8 +47,12 @@ class JsonReportPrinterTest {
         assertFalse(root.path("completeness").path("geometryVisibility").asBoolean());
         assertTrue(root.path("pages").path(0).path("geometryVisibility")
                 .path("invisibleGlyphCount").isNull());
+        assertFalse(root.path("pages").path(0).path("spatialEvidence")
+                .path("assessed").asBoolean());
+        assertTrue(root.path("pages").path(0).path("spatialEvidence")
+                .path("coordinateSpace").isNull());
 
-        assertValidAgainst("report-schema-v2.json", json);
+        assertValidAgainst("report-schema-v3.json", json);
     }
 
     @Test
@@ -64,7 +68,7 @@ class JsonReportPrinterTest {
 
         var root = MAPPER.readTree(JsonReportPrinter.toJson(report));
 
-        assertEquals(2, root.path("schemaVersion").asInt());
+        assertEquals(3, root.path("schemaVersion").asInt());
         assertEquals(0, root.path("pages").size());
         assertEquals(0, root.path("parseHealth").path("diagnostics").size());
     }

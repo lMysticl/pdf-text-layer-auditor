@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.EnumMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -202,6 +203,7 @@ public final class PdfTextLayerAuditor {
         protected void startPage(PDPage page) throws IOException {
             super.startPage(page);
             currentPage = pages.get(getCurrentPageNo());
+            currentPage.setGeometry(page);
             malformedFontFallback = false;
             fontSelectionFailed = false;
             actualTextFrames.clear();
@@ -390,6 +392,7 @@ public final class PdfTextLayerAuditor {
     }
 
     private static final class MutablePage {
+        private static final int MAX_LOCATION_SAMPLES_PER_FINDING = 8;
         private final int pageNumber;
         private final float tinyTextThresholdPoints;
         private final Map<FontKey, MutableFont> fonts = new LinkedHashMap<>();
@@ -418,10 +421,36 @@ public final class PdfTextLayerAuditor {
         private int variationSelectorCount;
         private int zeroWidthJoinerCount;
         private int bidiControlCount;
+        private final Map<Finding, List<FindingLocation>> locationSamples =
+                new EnumMap<>(Finding.class);
+        private double pageWidthPoints;
+        private double pageHeightPoints;
+        private int pageRotationDegrees;
+        private boolean geometryAssessed;
+        private long totalLocationCount;
 
         private MutablePage(int pageNumber, float tinyTextThresholdPoints) {
             this.pageNumber = pageNumber;
             this.tinyTextThresholdPoints = tinyTextThresholdPoints;
+        }
+
+        private void setGeometry(PDPage page) {
+            org.apache.pdfbox.pdmodel.common.PDRectangle crop = page.getCropBox();
+            int rotation = Math.floorMod(page.getRotation(), 360);
+            if (crop == null
+                    || !Float.isFinite(crop.getWidth())
+                    || !Float.isFinite(crop.getHeight())
+                    || crop.getWidth() <= 0
+                    || crop.getHeight() <= 0
+                    || rotation % 90 != 0) {
+                geometryAssessed = false;
+                return;
+            }
+            pageRotationDegrees = rotation;
+            boolean quarterTurn = rotation == 90 || rotation == 270;
+            pageWidthPoints = quarterTurn ? crop.getHeight() : crop.getWidth();
+            pageHeightPoints = quarterTurn ? crop.getWidth() : crop.getHeight();
+            geometryAssessed = true;
         }
 
         private void accept(
@@ -446,7 +475,9 @@ public final class PdfTextLayerAuditor {
             } else {
                 rawMappedGlyphCount++;
             }
-            if (!mappingUntrusted && usesImplicitCompositeMapping(text)) {
+            boolean implicitCompositeMapping =
+                    !mappingUntrusted && usesImplicitCompositeMapping(text);
+            if (implicitCompositeMapping) {
                 implicitCompositeMappingGlyphCount++;
             }
             if (actualTextActive) {
@@ -456,9 +487,12 @@ public final class PdfTextLayerAuditor {
                 }
             } else if (rawMappingMissing) {
                 missingUnicodeGlyphCount++;
+                recordLocation(Finding.MISSING_UNICODE, text);
             }
 
             String unicode = actualTextActive ? semanticOverride : rawUnicode;
+            boolean replacementPresent = false;
+            boolean rightToLeftPresent = false;
             if (unicode != null && !unicode.isEmpty()) {
                 unicodeCharacterCount += semanticCharacterCount;
                 if (actualTextActive) {
@@ -469,15 +503,30 @@ public final class PdfTextLayerAuditor {
                     int codePoint = unicode.codePointAt(offset);
                     if (codePoint == 0xFFFD) {
                         replacementCharacterCount++;
+                        replacementPresent = true;
                     }
+                    byte directionality = Character.getDirectionality(codePoint);
+                    rightToLeftPresent |= directionality == Character.DIRECTIONALITY_RIGHT_TO_LEFT
+                            || directionality
+                                    == Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC;
                     acceptUnicodeCodePoint(codePoint);
                     offset += Character.charCount(codePoint);
                 }
+            }
+            if (replacementPresent) {
+                recordLocation(Finding.REPLACEMENT_CHARACTERS, text);
+            }
+            if (implicitCompositeMapping) {
+                recordLocation(Finding.IMPLICIT_COMPOSITE_UNICODE_MAPPING, text);
+            }
+            if (rightToLeftPresent) {
+                recordLocation(Finding.RTL_TEXT_REQUIRES_EXTRACTION_PROFILE, text);
             }
 
             if (tinyTextThresholdPoints > 0
                     && text.getFontSizeInPt() < tinyTextThresholdPoints) {
                 tinyTextGlyphCount++;
+                recordLocation(Finding.TINY_TEXT, text);
             }
 
             PDFont font = text.getFont();
@@ -536,6 +585,31 @@ public final class PdfTextLayerAuditor {
 
         private void acceptPositionText(String text) {
             positionSemanticText.append(text);
+        }
+
+        private void recordLocation(Finding finding, TextPosition text) {
+            if (!geometryAssessed) {
+                return;
+            }
+            totalLocationCount++;
+            List<FindingLocation> samples = locationSamples.computeIfAbsent(
+                    finding,
+                    ignored -> new ArrayList<>());
+            if (samples.size() >= MAX_LOCATION_SAMPLES_PER_FINDING) {
+                return;
+            }
+            double width = Math.max(0, Math.abs(text.getWidthDirAdj()));
+            double height = Math.max(0, Math.abs(text.getHeightDir()));
+            samples.add(new FindingLocation(
+                    finding,
+                    rounded(text.getXDirAdj()),
+                    rounded(text.getYDirAdj() - height),
+                    rounded(width),
+                    rounded(height)));
+        }
+
+        private static double rounded(double value) {
+            return Math.rint(value * 1_000d) / 1_000d;
         }
 
         private static ParseDiagnosticCode inspectToUnicode(COSDictionary fontDictionary) {
@@ -704,8 +778,25 @@ public final class PdfTextLayerAuditor {
                             variationSelectorCount,
                             zeroWidthJoinerCount,
                             bidiControlCount),
+                    spatialEvidence(),
                     fontAudits,
                     findings);
+        }
+
+        private SpatialEvidenceAudit spatialEvidence() {
+            if (!geometryAssessed) {
+                return SpatialEvidenceAudit.unassessed();
+            }
+            List<FindingLocation> locations = locationSamples.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .flatMap(entry -> entry.getValue().stream())
+                    .toList();
+            return SpatialEvidenceAudit.assessed(
+                    pageWidthPoints,
+                    pageHeightPoints,
+                    pageRotationDegrees,
+                    totalLocationCount,
+                    locations);
         }
 
         private static FontDescriptor describeFont(PDFont font) {
