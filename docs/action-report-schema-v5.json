@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lMysticl/pdf-text-layer-auditor/main/docs/action-report-schema-v5.json",
+  "title": "PDF Text Layer Audit GitHub Action report v5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "repository",
+    "pullRequestNumber",
+    "filesChecked",
+    "filesWithFindings",
+    "filesFailed",
+    "conclusion",
+    "files"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 5 },
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "pullRequestNumber": { "type": "integer", "minimum": 1 },
+    "filesChecked": { "type": "integer", "minimum": 0 },
+    "filesWithFindings": { "type": "integer", "minimum": 0 },
+    "filesFailed": { "type": "integer", "minimum": 0 },
+    "conclusion": {
+      "type": "string",
+      "enum": ["passed", "neutral", "findings", "error"]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/auditedFile" },
+          { "$ref": "#/$defs/failedFile" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "auditedFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "status", "report"],
+      "properties": {
+        "path": { "type": "string" },
+        "status": { "type": "string", "enum": ["passed", "attention"] },
+        "report": { "$ref": "report-schema-v5.json" }
+      }
+    },
+    "failedFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "status", "error"],
+      "properties": {
+        "path": { "type": "string" },
+        "status": { "const": "error" },
+        "error": { "type": "string" }
+      }
+    }
+  }
+}

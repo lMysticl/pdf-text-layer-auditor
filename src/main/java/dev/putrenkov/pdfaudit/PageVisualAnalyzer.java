@@ -9,6 +9,7 @@ import java.awt.geom.Rectangle2D;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.HashSet;
@@ -59,8 +60,10 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     private double maxImageCoverageRatio;
     private final AdaptiveAreaUnion combinedImageArea;
     private final Set<Integer> imageGridCells = new HashSet<>();
-    private final List<VisualRegion> visualRegions = new ArrayList<>();
-    private long totalVisualRegionCount;
+    private final Map<VisualRegionType, List<VisualRegion>> visualRegions =
+            new EnumMap<>(VisualRegionType.class);
+    private final Map<VisualRegionType, Long> visualRegionCounts =
+            new EnumMap<>(VisualRegionType.class);
     private final Set<Integer> visibleTextGridCells = new HashSet<>();
     private int paintedVectorPathCount;
     private boolean optionalContentPresent;
@@ -95,6 +98,10 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         this.optionalContentProperties = optionalContentProperties;
         this.workLimits = workLimits;
         this.combinedImageArea = new AdaptiveAreaUnion(page.getCropBox());
+        for (VisualRegionType type : VisualRegionType.values()) {
+            visualRegions.put(type, new ArrayList<>());
+            visualRegionCounts.put(type, 0L);
+        }
     }
 
     static Map<Integer, PageEvidence> analyze(
@@ -118,6 +125,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
             }
             for (PDAnnotation annotation : annotations) {
                 analyzer.recordOptionalContent(annotation.getOptionalContent());
+                analyzer.recordAnnotationRegion(annotation);
                 analyzer.processAnnotationAppearances(annotation);
             }
             int widgetCount = (int) annotations.stream()
@@ -164,9 +172,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
                             analyzer.hiddenInPrintReferenceCount,
                             analyzer.hiddenInExportReferenceCount,
                             analyzer.optionalContentEvaluationFailureCount),
-                    VisualRegionAudit.of(
-                            analyzer.totalVisualRegionCount,
-                            analyzer.visualRegions)));
+                    analyzer.visualRegionAudit()));
         }
         return results;
     }
@@ -309,7 +315,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
                 Math.max(0, Math.min(1, coverage)));
         combinedImageArea.add(paintedArea);
         recordImageGridCells(paintedArea);
-        recordImageRegion(paintedArea);
+        recordVisualRegion(VisualRegionType.IMAGE, paintedArea);
     }
 
     @Override
@@ -699,24 +705,72 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         }
     }
 
-    private void recordImageRegion(Area paintedArea) {
+    private void recordAnnotationRegion(PDAnnotation annotation) {
+        if (annotation.isHidden() || annotation.isInvisible() || annotation.isNoView()) {
+            return;
+        }
+        PDPropertyList optionalContent = annotation.getOptionalContent();
+        if (optionalContent != null) {
+            Boolean hiddenInView = isHidden(
+                    optionalContent,
+                    RenderDestination.VIEW,
+                    0,
+                    identitySet());
+            if (!Boolean.FALSE.equals(hiddenInView)) {
+                return;
+            }
+        }
+        PDRectangle rectangle = annotation.getRectangle();
+        if (rectangle == null) {
+            return;
+        }
+        double x = Math.min(rectangle.getLowerLeftX(), rectangle.getUpperRightX());
+        double y = Math.min(rectangle.getLowerLeftY(), rectangle.getUpperRightY());
+        double width = Math.abs(rectangle.getWidth());
+        double height = Math.abs(rectangle.getHeight());
+        if (!Double.isFinite(x)
+                || !Double.isFinite(y)
+                || !Double.isFinite(width)
+                || !Double.isFinite(height)
+                || width <= 0
+                || height <= 0) {
+            return;
+        }
+        Area visibleArea = new Area(new Rectangle2D.Double(x, y, width, height));
+        PDRectangle crop = getPage().getCropBox();
+        visibleArea.intersect(new Area(new Rectangle2D.Double(
+                crop.getLowerLeftX(),
+                crop.getLowerLeftY(),
+                crop.getWidth(),
+                crop.getHeight())));
+        recordVisualRegion(
+                annotation instanceof PDAnnotationWidget
+                        ? VisualRegionType.FORM_FIELD
+                        : VisualRegionType.ANNOTATION,
+                visibleArea);
+    }
+
+    private void recordVisualRegion(VisualRegionType type, Area paintedArea) {
         if (paintedArea.isEmpty()) {
             return;
         }
         VisualRegion region = toDisplayRegion(
+                type,
                 getPage().getCropBox(),
                 getPage().getRotation(),
                 paintedArea.getBounds2D());
         if (region == null) {
             return;
         }
-        totalVisualRegionCount++;
-        if (visualRegions.size() < MAX_VISUAL_REGION_SAMPLES) {
-            visualRegions.add(region);
+        visualRegionCounts.merge(type, 1L, Long::sum);
+        List<VisualRegion> samples = visualRegions.get(type);
+        if (samples.size() < MAX_VISUAL_REGION_SAMPLES) {
+            samples.add(region);
         }
     }
 
     private static VisualRegion toDisplayRegion(
+            VisualRegionType type,
             PDRectangle crop,
             int pageRotation,
             Rectangle2D pdfBounds
@@ -779,11 +833,23 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
             return null;
         }
         return new VisualRegion(
-                VisualRegionType.IMAGE,
+                type,
                 rounded(boundedX),
                 rounded(boundedY),
                 rounded(boundedWidth),
                 rounded(boundedHeight));
+    }
+
+    private VisualRegionAudit visualRegionAudit() {
+        VisualRegionCounts counts = new VisualRegionCounts(
+                visualRegionCounts.get(VisualRegionType.IMAGE),
+                visualRegionCounts.get(VisualRegionType.ANNOTATION),
+                visualRegionCounts.get(VisualRegionType.FORM_FIELD));
+        List<VisualRegion> samples = new ArrayList<>();
+        for (VisualRegionType type : VisualRegionType.values()) {
+            samples.addAll(visualRegions.get(type));
+        }
+        return VisualRegionAudit.of(counts, samples);
     }
 
     private static double rounded(double value) {

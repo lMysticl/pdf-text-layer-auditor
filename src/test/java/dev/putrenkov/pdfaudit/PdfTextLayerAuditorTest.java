@@ -42,6 +42,7 @@ import org.apache.pdfbox.pdmodel.graphics.shading.PDShadingType2;
 import org.apache.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState;
 import org.apache.pdfbox.pdmodel.graphics.state.RenderingMode;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationText;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -258,6 +259,80 @@ class PdfTextLayerAuditorTest {
         assertImageRegion(pages.get(3), 270, 100, 200, 60, 150, 10, 20);
     }
 
+    @Test
+    void recordsVisibleAnnotationAndFormRegionsWithoutImageSampleStarvation()
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("typed-object-regions.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDRectangle crop = new PDRectangle(10, 20, 200, 100);
+            PDPage page = new PDPage(crop);
+            page.setRotation(90);
+            document.addPage(page);
+            PDOptionalContentGroup off = new PDOptionalContentGroup("off");
+            PDOptionalContentProperties properties = new PDOptionalContentProperties();
+            properties.addGroup(off);
+            properties.setGroupEnabled(off, false);
+            document.getDocumentCatalog().setOCProperties(properties);
+            BufferedImage pixel = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+            var image = LosslessFactory.createFromImage(document, pixel);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                for (int index = 0; index < 33; index++) {
+                    content.drawImage(image, 40, 50, 20, 10);
+                }
+            }
+            PDAnnotationText annotation = new PDAnnotationText();
+            annotation.setRectangle(new PDRectangle(60, 70, 30, 15));
+            annotation.setContents("do-not-retain-annotation-content");
+            PDAnnotationWidget widget = new PDAnnotationWidget();
+            widget.setRectangle(new PDRectangle(100, 80, 40, 10));
+            PDAnnotationText hidden = new PDAnnotationText();
+            hidden.setRectangle(new PDRectangle(20, 30, 10, 10));
+            hidden.setHidden(true);
+            PDAnnotationText invisible = new PDAnnotationText();
+            invisible.setRectangle(new PDRectangle(30, 40, 10, 10));
+            invisible.setInvisible(true);
+            PDAnnotationText noView = new PDAnnotationText();
+            noView.setRectangle(new PDRectangle(40, 50, 10, 10));
+            noView.setNoView(true);
+            PDAnnotationText outsideCrop = new PDAnnotationText();
+            outsideCrop.setRectangle(new PDRectangle(500, 500, 10, 10));
+            PDAnnotationText noRectangle = new PDAnnotationText();
+            PDAnnotationText optionalHidden = new PDAnnotationText();
+            optionalHidden.setRectangle(new PDRectangle(50, 60, 10, 10));
+            optionalHidden.setOptionalContent(off);
+            page.setAnnotations(List.of(
+                    annotation,
+                    widget,
+                    hidden,
+                    invisible,
+                    noView,
+                    outsideCrop,
+                    noRectangle,
+                    optionalHidden));
+            document.save(pdf.toFile());
+        }
+
+        AuditReport report = new PdfTextLayerAuditor().audit(pdf);
+        PageAudit page = report.pages().getFirst();
+        VisualRegionAudit visualRegions = page.spatialEvidence().visualRegions();
+
+        assertEquals(35, visualRegions.totalRegionCount());
+        assertEquals(33, visualRegions.counts().imageCount());
+        assertEquals(1, visualRegions.counts().annotationCount());
+        assertEquals(1, visualRegions.counts().formFieldCount());
+        assertEquals(34, visualRegions.regions().size());
+        assertTrue(visualRegions.regionsTruncated());
+        assertRegion(visualRegions.regions().get(32),
+                VisualRegionType.ANNOTATION, 50, 50, 15, 30);
+        assertRegion(visualRegions.regions().get(33),
+                VisualRegionType.FORM_FIELD, 60, 90, 10, 40);
+        assertEquals(8, page.visualContent().annotationCount());
+        assertEquals(1, page.visualContent().widgetAnnotationCount());
+        assertEquals(1, page.optionalContent().hiddenInViewReferenceCount());
+        assertFalse(JsonReportPrinter.toJson(report)
+                .contains("do-not-retain-annotation-content"));
+    }
+
     private static void assertImageRegion(
             PageAudit page,
             int rotation,
@@ -278,6 +353,21 @@ class PdfTextLayerAuditorTest {
         assertFalse(visualRegions.regionsTruncated());
         VisualRegion region = visualRegions.regions().getFirst();
         assertEquals(VisualRegionType.IMAGE, region.type());
+        assertEquals(x, region.xPoints(), 0.001);
+        assertEquals(y, region.yPoints(), 0.001);
+        assertEquals(width, region.widthPoints(), 0.001);
+        assertEquals(height, region.heightPoints(), 0.001);
+    }
+
+    private static void assertRegion(
+            VisualRegion region,
+            VisualRegionType type,
+            double x,
+            double y,
+            double width,
+            double height
+    ) {
+        assertEquals(type, region.type());
         assertEquals(x, region.xPoints(), 0.001);
         assertEquals(y, region.yPoints(), 0.001);
         assertEquals(width, region.widthPoints(), 0.001);
