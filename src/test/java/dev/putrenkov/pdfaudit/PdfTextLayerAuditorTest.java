@@ -219,10 +219,69 @@ class PdfTextLayerAuditorTest {
         assertEquals(81, pages.get(7).visualContent().imageCount());
         assertTrue(pages.get(7).visualContent().maxImageCoverageRatio() < 0.02);
         assertTrue(pages.get(7).visualContent().combinedImageCoverageRatio() > 0.99);
+        assertEquals(81, pages.get(7).spatialEvidence()
+                .visualRegions().totalRegionCount());
+        assertEquals(32, pages.get(7).spatialEvidence()
+                .visualRegions().regions().size());
+        assertTrue(pages.get(7).spatialEvidence()
+                .visualRegions().regionsTruncated());
         assertTrue(pages.get(0).visualContent().paintedVectorPathCount() >= 4);
         assertEquals(1, pages.get(1).visualContent().annotationCount());
         assertEquals(1, pages.get(1).visualContent().widgetAnnotationCount());
         assertTrue(pages.get(1).visualContent().optionalContentPresent());
+    }
+
+    @Test
+    void recordsImageRegionsInTopLeftDisplayCoordinatesForEveryPageRotation()
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("image-spatial-evidence.pdf");
+        try (PDDocument document = new PDDocument()) {
+            BufferedImage pixel = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+            var image = LosslessFactory.createFromImage(document, pixel);
+            for (int rotation : List.of(0, 90, 180, 270)) {
+                PDRectangle crop = new PDRectangle(10, 20, 200, 100);
+                PDPage page = new PDPage(crop);
+                page.setRotation(rotation);
+                document.addPage(page);
+                try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                    content.drawImage(image, 40, 50, 20, 10);
+                }
+            }
+            document.save(pdf.toFile());
+        }
+
+        List<PageAudit> pages = new PdfTextLayerAuditor().audit(pdf).pages();
+
+        assertImageRegion(pages.get(0), 0, 200, 100, 30, 60, 20, 10);
+        assertImageRegion(pages.get(1), 90, 100, 200, 30, 30, 10, 20);
+        assertImageRegion(pages.get(2), 180, 200, 100, 150, 30, 20, 10);
+        assertImageRegion(pages.get(3), 270, 100, 200, 60, 150, 10, 20);
+    }
+
+    private static void assertImageRegion(
+            PageAudit page,
+            int rotation,
+            double pageWidth,
+            double pageHeight,
+            double x,
+            double y,
+            double width,
+            double height
+    ) {
+        SpatialEvidenceAudit spatial = page.spatialEvidence();
+        assertTrue(spatial.assessed());
+        assertEquals(rotation, spatial.rotationDegrees());
+        assertEquals(pageWidth, spatial.pageWidthPoints());
+        assertEquals(pageHeight, spatial.pageHeightPoints());
+        VisualRegionAudit visualRegions = spatial.visualRegions();
+        assertEquals(1, visualRegions.totalRegionCount());
+        assertFalse(visualRegions.regionsTruncated());
+        VisualRegion region = visualRegions.regions().getFirst();
+        assertEquals(VisualRegionType.IMAGE, region.type());
+        assertEquals(x, region.xPoints(), 0.001);
+        assertEquals(y, region.yPoints(), 0.001);
+        assertEquals(width, region.widthPoints(), 0.001);
+        assertEquals(height, region.heightPoints(), 0.001);
     }
 
     @Test

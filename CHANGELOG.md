@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add report and GitHub Action schemas v4 with bounded, text-free `IMAGE`
+  regions in top-left display coordinates.
+- Preserve exact visible-image counts with explicit truncation while limiting
+  stored image bounds to 32 per page.
+- Keep schemas v1-v3 published for existing consumers.
+
 ## 0.7.0 — 2026-08-02
 
 - Add report and GitHub Action schemas v3 with display-oriented page geometry

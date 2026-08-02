@@ -13,12 +13,16 @@ public record SpatialEvidenceAudit(
         String coordinateSpace,
         long totalLocationCount,
         boolean locationsTruncated,
-        List<FindingLocation> locations
+        List<FindingLocation> locations,
+        VisualRegionAudit visualRegions
 ) {
     public static final String TOP_LEFT_DISPLAY_POINTS = "TOP_LEFT_DISPLAY_POINTS";
 
     public SpatialEvidenceAudit {
         locations = List.copyOf(locations);
+        if (visualRegions == null) {
+            throw new IllegalArgumentException("Visual region evidence is required");
+        }
         if (totalLocationCount < 0 || totalLocationCount < locations.size()) {
             throw new IllegalArgumentException("Spatial evidence counters are invalid");
         }
@@ -31,7 +35,8 @@ public record SpatialEvidenceAudit(
                     || rotationDegrees != null
                     || coordinateSpace != null
                     || totalLocationCount != 0
-                    || !locations.isEmpty()) {
+                    || !locations.isEmpty()
+                    || visualRegions.totalRegionCount() != 0) {
                 throw new IllegalArgumentException("Unassessed spatial evidence must be empty");
             }
         } else if (pageWidthPoints == null
@@ -47,12 +52,35 @@ public record SpatialEvidenceAudit(
         }
     }
 
+    public SpatialEvidenceAudit(
+            boolean assessed,
+            Double pageWidthPoints,
+            Double pageHeightPoints,
+            Integer rotationDegrees,
+            String coordinateSpace,
+            long totalLocationCount,
+            boolean locationsTruncated,
+            List<FindingLocation> locations
+    ) {
+        this(
+                assessed,
+                pageWidthPoints,
+                pageHeightPoints,
+                rotationDegrees,
+                coordinateSpace,
+                totalLocationCount,
+                locationsTruncated,
+                locations,
+                VisualRegionAudit.empty());
+    }
+
     public static SpatialEvidenceAudit assessed(
             double pageWidthPoints,
             double pageHeightPoints,
             int rotationDegrees,
             long totalLocationCount,
-            List<FindingLocation> locations
+            List<FindingLocation> locations,
+            VisualRegionAudit visualRegions
     ) {
         return new SpatialEvidenceAudit(
                 true,
@@ -62,7 +90,24 @@ public record SpatialEvidenceAudit(
                 TOP_LEFT_DISPLAY_POINTS,
                 totalLocationCount,
                 totalLocationCount > locations.size(),
-                locations);
+                locations,
+                visualRegions);
+    }
+
+    public static SpatialEvidenceAudit assessed(
+            double pageWidthPoints,
+            double pageHeightPoints,
+            int rotationDegrees,
+            long totalLocationCount,
+            List<FindingLocation> locations
+    ) {
+        return assessed(
+                pageWidthPoints,
+                pageHeightPoints,
+                rotationDegrees,
+                totalLocationCount,
+                locations,
+                VisualRegionAudit.empty());
     }
 
     public static SpatialEvidenceAudit unassessed() {
@@ -74,6 +119,7 @@ public record SpatialEvidenceAudit(
                 null,
                 0,
                 false,
-                List.of());
+                List.of(),
+                VisualRegionAudit.empty());
     }
 }

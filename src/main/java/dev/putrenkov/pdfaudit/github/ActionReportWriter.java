@@ -16,7 +16,7 @@ import java.util.Objects;
 import java.util.Set;
 
 final class ActionReportWriter {
-    static final int SCHEMA_VERSION = 3;
+    static final int SCHEMA_VERSION = 4;
 
     private final ObjectMapper objectMapper;
 

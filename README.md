@@ -59,7 +59,7 @@ jobs:
 
       - name: Audit changed PDFs
         id: pdf-audit
-        uses: lMysticl/pdf-text-layer-auditor@v0.7.0
+        uses: lMysticl/pdf-text-layer-auditor@v0.8.0
         with:
           token: ${{ github.token }}
 
@@ -111,10 +111,10 @@ files through the pull-request files endpoint, so the action also rejects
 larger pull requests instead of silently auditing an incomplete list.
 
 The combined report follows the versioned
-[GitHub Action report schema v3](docs/action-report-schema-v3.json). Each
+[GitHub Action report schema v4](docs/action-report-schema-v4.json). Each
 successful file entry embeds the
-[auditor report schema v3](docs/report-schema-v3.json). The v1 and v2 schemas
-remain available for consumers of releases through 0.6.x.
+[auditor report schema v4](docs/report-schema-v4.json). The v1, v2 and v3
+schemas remain available for consumers of earlier releases.
 
 ## Quick start
 
@@ -146,13 +146,16 @@ java -jar target/pdf-text-layer-auditor.jar --json document.pdf
 JSON output includes the report summary, parse health, evidence-completeness
 flags, per-page text surfaces, raw-versus-semantic Unicode mapping, reading
 order, page classification, image/vector/annotation inventory, glyph geometry
-and paint-state observations, font state, and findings. Schema v3 also records
+and paint-state observations, font state, and findings. Schema v3 records
 display-oriented page geometry and bounded, text-free location boxes for
 missing Unicode, replacement characters, tiny text, implicit composite
-mapping, and RTL-profile findings. New reports use the strict
-[version 3 JSON Schema](docs/report-schema-v3.json); the
+mapping, and RTL-profile findings. Schema v4 additionally records bounded
+`IMAGE` regions so image-only and partial-OCR evidence can be located without
+retaining image or document content. New reports use the strict
+[version 4 JSON Schema](docs/report-schema-v4.json); the
 [version 1](docs/report-schema-v1.json) and
-[version 2](docs/report-schema-v2.json) schemas remain published for existing
+[version 2](docs/report-schema-v2.json) and
+[version 3](docs/report-schema-v3.json) schemas remain published for existing
 consumers. A `false` completeness flag means that the corresponding surface
 was not assessed and must not be interpreted as clean. Successful reports
 always set `extractionAllowed` to `true`; a PDF that forbids extraction
@@ -187,9 +190,14 @@ exist. Boxes describe the extraction location, not an exact vector outline of
 the painted glyph. No extracted text or font name is stored in a location.
 Findings such as reading-order divergence or a page-wide OCR classification
 remain page-level until a defensible smaller region can be derived.
+`visualRegions` separately keeps at most 32 visible image bounds per page,
+reports the exact `totalRegionCount`, and sets `regionsTruncated` for image
+mosaics. A region is the bounding rectangle of the painted, crop- and
+clip-intersected image area, not a claim that every pixel inside the rectangle
+contains text.
 
 The auditor is script-neutral: it validates Unicode mappings rather than
-assuming Latin text. Schema v3 reports observed scripts such as `HAN`,
+assuming Latin text. Structured reports include observed scripts such as `HAN`,
 `ARABIC`, `HEBREW`, `DEVANAGARI`, `THAI`, and `HANGUL`, together with RTL,
 combining-mark, non-BMP, variation-selector, ZWJ, and bidi-control counts.
 Font evidence includes subtype, encoding (`Identity-H`/`Identity-V` when
