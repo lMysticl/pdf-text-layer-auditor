@@ -38,7 +38,7 @@ public record VisualRegionAudit(
         this(
                 totalRegionCount,
                 regionsTruncated,
-                new VisualRegionCounts(totalRegionCount, 0, 0),
+                new VisualRegionCounts(totalRegionCount, 0, 0, 0),
                 regions);
     }
 
@@ -55,7 +55,7 @@ public record VisualRegionAudit(
     }
 
     public static VisualRegionAudit of(long totalRegionCount, List<VisualRegion> regions) {
-        return of(new VisualRegionCounts(totalRegionCount, 0, 0), regions);
+        return of(new VisualRegionCounts(totalRegionCount, 0, 0, 0), regions);
     }
 
     public static VisualRegionAudit empty() {

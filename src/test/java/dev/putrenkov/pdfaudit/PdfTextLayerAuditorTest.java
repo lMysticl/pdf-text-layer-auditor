@@ -333,6 +333,99 @@ class PdfTextLayerAuditorTest {
                 .contains("do-not-retain-annotation-content"));
     }
 
+    @Test
+    void recordsOnlyLocatablePaintedVectorPathRegionsWithExactPerTypeCounts()
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("vector-path-regions.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDRectangle crop = new PDRectangle(10, 20, 200, 100);
+            PDPage bounded = new PDPage(crop);
+            bounded.setRotation(90);
+            document.addPage(bounded);
+            try (PDPageContentStream content = new PDPageContentStream(document, bounded)) {
+                content.addRect(30, 40, 20, 10);
+                content.fill();
+
+                content.setLineWidth(4);
+                content.moveTo(70, 60);
+                content.lineTo(90, 60);
+                content.stroke();
+
+                content.saveGraphicsState();
+                content.addRect(110, 40, 10, 10);
+                content.clip();
+                content.addRect(105, 35, 30, 30);
+                content.fill();
+                content.restoreGraphicsState();
+
+                PDExtendedGraphicsState transparent = new PDExtendedGraphicsState();
+                transparent.setNonStrokingAlphaConstant(0f);
+                content.saveGraphicsState();
+                content.setGraphicsStateParameters(transparent);
+                content.addRect(140, 40, 10, 10);
+                content.fill();
+                content.restoreGraphicsState();
+
+                content.addRect(500, 500, 10, 10);
+                content.fill();
+
+                content.addRect(130, 80, 0.0001f, 10);
+                content.fill();
+
+                content.setLineWidth(2);
+                content.addRect(150, 60, 10, 10);
+                content.fillAndStroke();
+
+                content.setLineDashPattern(new float[]{0, 0}, 0);
+                content.moveTo(30, 90);
+                content.lineTo(60, 90);
+                content.stroke();
+
+                PDShadingType2 shading = new PDShadingType2(new COSDictionary());
+                content.shadingFill(shading);
+            }
+
+            PDPage truncated = new PDPage(crop);
+            document.addPage(truncated);
+            try (PDPageContentStream content = new PDPageContentStream(document, truncated)) {
+                for (int index = 0; index < 33; index++) {
+                    content.addRect(
+                            20 + index % 11 * 15,
+                            30 + index / 11 * 20,
+                            5,
+                            5);
+                    content.fill();
+                }
+            }
+            document.save(pdf.toFile());
+        }
+
+        AuditReport report = new PdfTextLayerAuditor().audit(pdf);
+        PageAudit bounded = report.pages().get(0);
+        VisualRegionAudit boundedRegions = bounded.spatialEvidence().visualRegions();
+        List<VisualRegion> vectorRegions = boundedRegions.regions().stream()
+                .filter(region -> region.type().name().equals("VECTOR_PATH"))
+                .toList();
+
+        assertEquals(4, boundedRegions.totalRegionCount());
+        assertEquals(4, vectorRegions.size());
+        assertRegionNamed(vectorRegions.get(0), "VECTOR_PATH", 20, 20, 10, 20);
+        assertRegionNamed(vectorRegions.get(1), "VECTOR_PATH", 38, 60, 4, 20);
+        assertRegionNamed(vectorRegions.get(2), "VECTOR_PATH", 20, 100, 10, 10);
+        assertRegionNamed(vectorRegions.get(3), "VECTOR_PATH", 39, 139, 12, 12);
+        assertEquals(9, bounded.visualContent().paintedVectorPathCount());
+
+        PageAudit truncated = report.pages().get(1);
+        VisualRegionAudit truncatedRegions = truncated.spatialEvidence().visualRegions();
+        assertEquals(33, truncatedRegions.totalRegionCount());
+        assertEquals(32, truncatedRegions.regions().stream()
+                .filter(region -> region.type().name().equals("VECTOR_PATH"))
+                .count());
+        assertTrue(truncatedRegions.regionsTruncated());
+        assertEquals(33, truncated.visualContent().paintedVectorPathCount());
+        assertTrue(JsonReportPrinter.toJson(report).contains("\"vectorPathCount\":33"));
+    }
+
     private static void assertImageRegion(
             PageAudit page,
             int rotation,
@@ -368,6 +461,21 @@ class PdfTextLayerAuditorTest {
             double height
     ) {
         assertEquals(type, region.type());
+        assertEquals(x, region.xPoints(), 0.001);
+        assertEquals(y, region.yPoints(), 0.001);
+        assertEquals(width, region.widthPoints(), 0.001);
+        assertEquals(height, region.heightPoints(), 0.001);
+    }
+
+    private static void assertRegionNamed(
+            VisualRegion region,
+            String type,
+            double x,
+            double y,
+            double width,
+            double height
+    ) {
+        assertEquals(type, region.type().name());
         assertEquals(x, region.xPoints(), 0.001);
         assertEquals(y, region.yPoints(), 0.001);
         assertEquals(width, region.widthPoints(), 0.001);

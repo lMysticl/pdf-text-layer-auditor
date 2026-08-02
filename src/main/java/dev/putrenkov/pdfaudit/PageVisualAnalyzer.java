@@ -1,5 +1,6 @@
 package dev.putrenkov.pdfaudit;
 
+import java.awt.BasicStroke;
 import java.awt.geom.Area;
 import java.awt.geom.FlatteningPathIterator;
 import java.awt.geom.GeneralPath;
@@ -35,6 +36,7 @@ import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentGroup;
 import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentMembershipDictionary;
 import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentProperties;
+import org.apache.pdfbox.pdmodel.graphics.PDLineDashPattern;
 import org.apache.pdfbox.pdmodel.graphics.state.RenderingMode;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
@@ -381,19 +383,19 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
 
     @Override
     public void strokePath() {
-        recordPaintedPath();
+        recordPaintedPath(false, true);
     }
 
     @Override
     public void fillPath(int windingRule) {
         currentPath.setWindingRule(windingRule);
-        recordPaintedPath();
+        recordPaintedPath(true, false);
     }
 
     @Override
     public void fillAndStrokePath(int windingRule) {
         currentPath.setWindingRule(windingRule);
-        recordPaintedPath();
+        recordPaintedPath(true, true);
     }
 
     @Override
@@ -401,11 +403,104 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         recordPaintedVectorOperation();
     }
 
-    private void recordPaintedPath() {
+    private void recordPaintedPath(boolean fill, boolean stroke) {
         if (!currentPath.getPathIterator(null).isDone()) {
             recordPaintedVectorOperation();
+            recordPaintedPathRegion(fill, stroke);
         }
         currentPath.reset();
+    }
+
+    private void recordPaintedPathRegion(boolean fill, boolean stroke) {
+        Area paintedArea = new Area();
+        if (fill && getGraphicsState().getNonStrokeAlphaConstant() > 0) {
+            paintedArea.add(new Area(currentPath));
+        }
+        if (stroke && getGraphicsState().getAlphaConstant() > 0) {
+            BasicStroke currentStroke = currentStroke();
+            if (currentStroke != null) {
+                paintedArea.add(new Area(currentStroke.createStrokedShape(currentPath)));
+            }
+        }
+        if (paintedArea.isEmpty()) {
+            return;
+        }
+        Area clippingPath = getGraphicsState().getCurrentClippingPath();
+        if (clippingPath != null) {
+            paintedArea.intersect(new Area(clippingPath));
+        }
+        PDRectangle crop = getPage().getCropBox();
+        paintedArea.intersect(new Area(new Rectangle2D.Double(
+                crop.getLowerLeftX(),
+                crop.getLowerLeftY(),
+                crop.getWidth(),
+                crop.getHeight())));
+        recordVisualRegion(VisualRegionType.VECTOR_PATH, paintedArea);
+    }
+
+    /**
+     * Mirrors PDFBox's page-renderer stroke geometry in page coordinates. Invalid or zero-containing
+     * dash arrays use the solid path envelope, while an all-zero dash is not visible at all.
+     */
+    private BasicStroke currentStroke() {
+        float lineWidth = transformWidth(getGraphicsState().getLineWidth());
+        if (!Float.isFinite(lineWidth)) {
+            return null;
+        }
+        lineWidth = Math.max(lineWidth, 0.25f);
+        int lineCap = Math.min(2, Math.max(0, getGraphicsState().getLineCap()));
+        int lineJoin = Math.min(2, Math.max(0, getGraphicsState().getLineJoin()));
+        float miterLimit = getGraphicsState().getMiterLimit();
+        if (!Float.isFinite(miterLimit) || miterLimit < 1) {
+            miterLimit = 10;
+        }
+
+        PDLineDashPattern dashPattern = getGraphicsState().getLineDashPattern();
+        float[] dashArray = dashPattern.getDashArray();
+        if (dashArray.length > 0 && allZero(dashArray)) {
+            return null;
+        }
+        float dashPhase = 0;
+        if (dashArray.length == 0 || !transformDashArray(dashArray)) {
+            dashArray = null;
+        } else {
+            dashPhase = transformWidth(dashPattern.getPhase());
+            if (!Float.isFinite(dashPhase) || dashPhase < 0) {
+                dashArray = null;
+                dashPhase = 0;
+            } else {
+                dashPhase = Math.min(dashPhase, Short.MAX_VALUE);
+            }
+        }
+        return new BasicStroke(
+                lineWidth,
+                lineCap,
+                lineJoin,
+                miterLimit,
+                dashArray,
+                dashPhase);
+    }
+
+    private boolean transformDashArray(float[] dashArray) {
+        for (int index = 0; index < dashArray.length; index++) {
+            if (!Float.isFinite(dashArray[index]) || dashArray[index] <= 0) {
+                return false;
+            }
+            dashArray[index] = transformWidth(dashArray[index]);
+            if (!Float.isFinite(dashArray[index]) || dashArray[index] <= 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allZero(float[] values) {
+        for (float value : values) {
+            if (value != 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean isOptionalContent(COSDictionary properties) {
@@ -778,6 +873,14 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         if (crop == null
                 || pdfBounds == null
                 || pdfBounds.isEmpty()
+                || !Float.isFinite(crop.getLowerLeftX())
+                || !Float.isFinite(crop.getLowerLeftY())
+                || !Float.isFinite(crop.getWidth())
+                || !Float.isFinite(crop.getHeight())
+                || !Double.isFinite(pdfBounds.getMinX())
+                || !Double.isFinite(pdfBounds.getMinY())
+                || !Double.isFinite(pdfBounds.getWidth())
+                || !Double.isFinite(pdfBounds.getHeight())
                 || crop.getWidth() <= 0
                 || crop.getHeight() <= 0) {
             return null;
@@ -832,19 +935,34 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         if (boundedWidth <= 0 || boundedHeight <= 0) {
             return null;
         }
+        double roundedX = rounded(boundedX);
+        double roundedY = rounded(boundedY);
+        double roundedWidth = rounded(boundedWidth);
+        double roundedHeight = rounded(boundedHeight);
+        if (!Double.isFinite(roundedX)
+                || !Double.isFinite(roundedY)
+                || !Double.isFinite(roundedWidth)
+                || !Double.isFinite(roundedHeight)
+                || roundedX < 0
+                || roundedY < 0
+                || roundedWidth <= 0
+                || roundedHeight <= 0) {
+            return null;
+        }
         return new VisualRegion(
                 type,
-                rounded(boundedX),
-                rounded(boundedY),
-                rounded(boundedWidth),
-                rounded(boundedHeight));
+                roundedX,
+                roundedY,
+                roundedWidth,
+                roundedHeight);
     }
 
     private VisualRegionAudit visualRegionAudit() {
         VisualRegionCounts counts = new VisualRegionCounts(
                 visualRegionCounts.get(VisualRegionType.IMAGE),
                 visualRegionCounts.get(VisualRegionType.ANNOTATION),
-                visualRegionCounts.get(VisualRegionType.FORM_FIELD));
+                visualRegionCounts.get(VisualRegionType.FORM_FIELD),
+                visualRegionCounts.get(VisualRegionType.VECTOR_PATH));
         List<VisualRegion> samples = new ArrayList<>();
         for (VisualRegionType type : VisualRegionType.values()) {
             samples.addAll(visualRegions.get(type));

@@ -6,7 +6,7 @@
 
     <groupId>dev.putrenkov</groupId>
     <artifactId>pdf-text-layer-auditor</artifactId>
-    <version>0.9.0</version>
+    <version>0.10.0</version>
     <name>PDF Text Layer Auditor</name>
     <description>Diagnose missing or suspicious PDF text layers for search, indexing, accessibility, and extraction workflows.</description>
     <url>https://github.com/lMysticl/pdf-text-layer-auditor</url>
