@@ -43,7 +43,7 @@ class ActionReportWriterTest {
         new ActionReportWriter(objectMapper).write(run, context, output);
 
         JsonNode report = objectMapper.readTree(output.toFile());
-        assertEquals(2, report.path("schemaVersion").intValue());
+        assertEquals(3, report.path("schemaVersion").intValue());
         assertEquals("findings", report.path("conclusion").textValue());
         assertEquals("docs/document.pdf", report.at("/files/0/path").textValue());
         assertEquals("docs/document.pdf", report.at("/files/0/report/file").textValue());
@@ -57,13 +57,13 @@ class ActionReportWriterTest {
         }
 
         String actionSchema = Files.readString(
-                Path.of("docs", "action-report-schema-v2.json"));
+                Path.of("docs", "action-report-schema-v3.json"));
         String auditorSchema = Files.readString(
-                Path.of("docs", "report-schema-v2.json"));
+                Path.of("docs", "report-schema-v3.json"));
         SchemaRegistry registry = SchemaRegistry.withDefaultDialect(
                 SpecificationVersion.DRAFT_2020_12,
                 builder -> builder.schemas(Map.of(
-                        "https://raw.githubusercontent.com/lMysticl/pdf-text-layer-auditor/main/docs/report-schema-v2.json",
+                        "https://raw.githubusercontent.com/lMysticl/pdf-text-layer-auditor/main/docs/report-schema-v3.json",
                         auditorSchema)));
 
         var errors = registry.getSchema(actionSchema)

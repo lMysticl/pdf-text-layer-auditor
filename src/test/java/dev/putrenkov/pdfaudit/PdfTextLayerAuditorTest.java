@@ -573,6 +573,58 @@ class PdfTextLayerAuditorTest {
         assertEquals(1, page.missingUnicodeGlyphCount());
         assertEquals(List.of(Finding.MISSING_UNICODE), page.findings());
         assertEquals(1, page.fonts().getFirst().rawUnmappedGlyphCount());
+        assertTrue(page.spatialEvidence().assessed());
+        assertEquals(612, page.spatialEvidence().pageWidthPoints());
+        assertEquals(792, page.spatialEvidence().pageHeightPoints());
+        assertEquals(1, page.spatialEvidence().totalLocationCount());
+        assertFalse(page.spatialEvidence().locationsTruncated());
+        FindingLocation location = page.spatialEvidence().locations().getFirst();
+        assertEquals(Finding.MISSING_UNICODE, location.code());
+        assertTrue(location.widthPoints() > 0);
+        assertTrue(location.heightPoints() > 0);
+    }
+
+    @Test
+    void boundsAndTruncatesFindingLocationsOnRotatedPages() throws IOException {
+        Path pdf = temporaryDirectory.resolve("rotated-spatial-evidence.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDType3Font font = createUnmappedType3Font(document);
+            PDPage page = new PDPage(PDRectangle.LETTER);
+            page.setRotation(90);
+            document.addPage(page);
+            page.setResources(new PDResources());
+            page.getResources().put(COSName.getPDFName("F1"), font);
+            PDStream pageContent = new PDStream(document);
+            try (var output = pageContent.createOutputStream()) {
+                output.write(
+                        "BT /F1 12 Tf 72 720 Td <414141414141414141414141> Tj ET"
+                                .getBytes(StandardCharsets.US_ASCII));
+            }
+            page.setContents(pageContent);
+            document.save(pdf.toFile());
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+        SpatialEvidenceAudit spatial = page.spatialEvidence();
+
+        assertEquals(12, page.missingUnicodeGlyphCount());
+        assertTrue(spatial.assessed());
+        assertEquals(792, spatial.pageWidthPoints());
+        assertEquals(612, spatial.pageHeightPoints());
+        assertEquals(90, spatial.rotationDegrees());
+        assertEquals(SpatialEvidenceAudit.TOP_LEFT_DISPLAY_POINTS, spatial.coordinateSpace());
+        assertEquals(12, spatial.totalLocationCount());
+        assertEquals(8, spatial.locations().size());
+        assertTrue(spatial.locationsTruncated());
+        for (FindingLocation location : spatial.locations()) {
+            assertEquals(Finding.MISSING_UNICODE, location.code());
+            assertTrue(location.xPoints() >= 0);
+            assertTrue(location.yPoints() >= 0);
+            assertTrue(location.xPoints() + location.widthPoints()
+                    <= spatial.pageWidthPoints() + 0.001);
+            assertTrue(location.yPoints() + location.heightPoints()
+                    <= spatial.pageHeightPoints() + 0.001);
+        }
     }
 
     @ParameterizedTest(name = "{0}")

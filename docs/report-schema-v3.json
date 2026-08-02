@@ -1,0 +1,495 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lMysticl/pdf-text-layer-auditor/main/docs/report-schema-v3.json",
+  "title": "PDF Text Layer Auditor report v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "file",
+    "fileSizeBytes",
+    "pageCount",
+    "inspectedPageCount",
+    "encrypted",
+    "extractionAllowed",
+    "tinyTextThresholdPoints",
+    "parseHealth",
+    "completeness",
+    "documentSurfaces",
+    "needsAttention",
+    "pagesNeedingAttention",
+    "pages"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 3 },
+    "file": { "type": "string" },
+    "fileSizeBytes": { "type": "integer", "minimum": 0 },
+    "pageCount": { "type": "integer", "minimum": 0 },
+    "inspectedPageCount": { "type": "integer", "minimum": 0 },
+    "encrypted": { "type": "boolean" },
+    "extractionAllowed": { "type": "boolean" },
+    "tinyTextThresholdPoints": { "type": "number", "minimum": 0 },
+    "parseHealth": { "$ref": "#/$defs/parseHealth" },
+    "completeness": { "$ref": "#/$defs/completeness" },
+    "documentSurfaces": { "$ref": "#/$defs/documentSurfaces" },
+    "needsAttention": { "type": "boolean" },
+    "pagesNeedingAttention": { "type": "integer", "minimum": 0 },
+    "pages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/page" }
+    }
+  },
+  "$defs": {
+    "parseHealth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete", "recovered", "parserWarningCount", "diagnostics"],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "recovered": { "type": "boolean" },
+        "parserWarningCount": { "type": "integer", "minimum": 0 },
+        "diagnostics": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/diagnostic" }
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "pageNumber", "fontName"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["MALFORMED_TOUNICODE_CMAP", "INVALID_TOUNICODE_CMAP"]
+        },
+        "pageNumber": { "type": "integer", "minimum": 1 },
+        "fontName": { "type": "string" }
+      }
+    },
+    "completeness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pageContent",
+        "formXObjects",
+        "semanticMappings",
+        "readingOrder",
+        "geometryVisibility",
+        "annotations",
+        "optionalContent"
+      ],
+      "properties": {
+        "pageContent": { "type": "boolean" },
+        "formXObjects": { "type": "boolean" },
+        "semanticMappings": { "type": "boolean" },
+        "readingOrder": { "type": "boolean" },
+        "geometryVisibility": { "type": "boolean" },
+        "annotations": { "type": "boolean" },
+        "optionalContent": { "type": "boolean" }
+      }
+    },
+    "documentSurfaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessed", "complete", "acroFormFieldCount", "signatureFieldCount",
+        "widgetWithoutAppearanceCount", "xfaPresent", "embeddedFileCount",
+        "associatedFileReferenceCount", "portfolioPresent"
+      ],
+      "properties": {
+        "assessed": { "type": "boolean" },
+        "complete": { "type": "boolean" },
+        "acroFormFieldCount": { "type": ["integer", "null"], "minimum": 0 },
+        "signatureFieldCount": { "type": ["integer", "null"], "minimum": 0 },
+        "widgetWithoutAppearanceCount": { "type": ["integer", "null"], "minimum": 0 },
+        "xfaPresent": { "type": ["boolean", "null"] },
+        "embeddedFileCount": { "type": ["integer", "null"], "minimum": 0 },
+        "associatedFileReferenceCount": { "type": ["integer", "null"], "minimum": 0 },
+        "portfolioPresent": { "type": ["boolean", "null"] }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pageNumber",
+        "glyphCount",
+        "unicodeCharacterCount",
+        "missingUnicodeGlyphCount",
+        "replacementCharacterCount",
+        "tinyTextGlyphCount",
+        "classification",
+        "textSurfaces",
+        "semanticMapping",
+        "readingOrder",
+        "geometryVisibility",
+        "visualContent",
+        "annotationAppearances",
+        "optionalContent",
+        "unicodeProfile",
+        "spatialEvidence",
+        "needsAttention",
+        "fonts",
+        "findings"
+      ],
+      "properties": {
+        "pageNumber": { "type": "integer", "minimum": 1 },
+        "glyphCount": { "type": "integer", "minimum": 0 },
+        "unicodeCharacterCount": { "type": "integer", "minimum": 0 },
+        "missingUnicodeGlyphCount": { "type": "integer", "minimum": 0 },
+        "replacementCharacterCount": { "type": "integer", "minimum": 0 },
+        "tinyTextGlyphCount": { "type": "integer", "minimum": 0 },
+        "classification": {
+          "type": "string",
+          "enum": [
+            "UNKNOWN",
+            "BLANK",
+            "VECTOR_ONLY",
+            "IMAGE_ONLY",
+            "NATIVE_TEXT",
+            "MIXED",
+            "SPARSE_OCR",
+            "PARTIAL_OCR"
+          ]
+        },
+        "textSurfaces": { "$ref": "#/$defs/textSurfaces" },
+        "semanticMapping": { "$ref": "#/$defs/semanticMapping" },
+        "readingOrder": { "$ref": "#/$defs/readingOrder" },
+        "geometryVisibility": { "$ref": "#/$defs/geometryVisibility" },
+        "visualContent": { "$ref": "#/$defs/visualContent" },
+        "annotationAppearances": { "$ref": "#/$defs/annotationAppearances" },
+        "optionalContent": { "$ref": "#/$defs/optionalContent" },
+        "unicodeProfile": { "$ref": "#/$defs/unicodeProfile" },
+        "spatialEvidence": { "$ref": "#/$defs/spatialEvidence" },
+        "needsAttention": { "type": "boolean" },
+        "fonts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/font" }
+        },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/finding" }
+        }
+      }
+    },
+    "textSurfaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pageContentGlyphCount",
+        "formXObjectGlyphCount",
+        "actualTextGlyphCount",
+        "actualTextCharacterCount"
+      ],
+      "properties": {
+        "pageContentGlyphCount": { "type": "integer", "minimum": 0 },
+        "formXObjectGlyphCount": { "type": "integer", "minimum": 0 },
+        "actualTextGlyphCount": { "type": "integer", "minimum": 0 },
+        "actualTextCharacterCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "semanticMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rawMappedGlyphCount",
+        "rawUnmappedGlyphCount",
+        "actualTextResolvedGlyphCount",
+        "malformedToUnicodeFontCount",
+        "implicitCompositeMappingGlyphCount"
+      ],
+      "properties": {
+        "rawMappedGlyphCount": { "type": "integer", "minimum": 0 },
+        "rawUnmappedGlyphCount": { "type": "integer", "minimum": 0 },
+        "actualTextResolvedGlyphCount": { "type": "integer", "minimum": 0 },
+        "malformedToUnicodeFontCount": { "type": "integer", "minimum": 0 },
+        "implicitCompositeMappingGlyphCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "readingOrder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessed",
+        "diverges",
+        "streamCharacterCount",
+        "positionCharacterCount"
+      ],
+      "properties": {
+        "assessed": { "type": "boolean" },
+        "diverges": { "type": "boolean" },
+        "streamCharacterCount": { "type": "integer", "minimum": 0 },
+        "positionCharacterCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "geometryVisibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessed",
+        "visibleGlyphCount",
+        "invisibleGlyphCount",
+        "offPageGlyphCount",
+        "clippedGlyphCount",
+        "transparentGlyphCount",
+        "duplicateOverlapGlyphCount",
+        "rotatedGlyphCount",
+        "verticalGlyphCount"
+      ],
+      "properties": {
+        "assessed": { "type": "boolean" },
+        "visibleGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "invisibleGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "offPageGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "clippedGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "transparentGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "duplicateOverlapGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "rotatedGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "verticalGlyphCount": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "visualContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessed",
+        "imageCount",
+        "maxImageCoverageRatio",
+        "combinedImageCoverageRatio",
+        "paintedVectorPathCount",
+        "annotationCount",
+        "widgetAnnotationCount",
+        "optionalContentPresent"
+      ],
+      "properties": {
+        "assessed": { "type": "boolean" },
+        "imageCount": { "type": ["integer", "null"], "minimum": 0 },
+        "maxImageCoverageRatio": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "combinedImageCoverageRatio": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "imageOccupiedGridCellCount": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 64
+        },
+        "imageTextOverlapGridCellCount": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 64
+        },
+        "imageTextOverlapRatio": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "paintedVectorPathCount": { "type": ["integer", "null"], "minimum": 0 },
+        "annotationCount": { "type": ["integer", "null"], "minimum": 0 },
+        "widgetAnnotationCount": { "type": ["integer", "null"], "minimum": 0 },
+        "optionalContentPresent": { "type": ["boolean", "null"] }
+      }
+    },
+    "annotationAppearances": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessed",
+        "appearanceStreamCount",
+        "glyphCount",
+        "unicodeCharacterCount",
+        "missingUnicodeGlyphCount",
+        "replacementCharacterCount"
+      ],
+      "properties": {
+        "assessed": { "type": "boolean" },
+        "appearanceStreamCount": { "type": ["integer", "null"], "minimum": 0 },
+        "glyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "unicodeCharacterCount": { "type": ["integer", "null"], "minimum": 0 },
+        "missingUnicodeGlyphCount": { "type": ["integer", "null"], "minimum": 0 },
+        "replacementCharacterCount": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "optionalContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "complete",
+        "referenceCount",
+        "membershipReferenceCount",
+        "hiddenInViewReferenceCount",
+        "hiddenInPrintReferenceCount",
+        "hiddenInExportReferenceCount",
+        "evaluationFailureCount"
+      ],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "referenceCount": { "type": "integer", "minimum": 0 },
+        "membershipReferenceCount": { "type": "integer", "minimum": 0 },
+        "hiddenInViewReferenceCount": { "type": "integer", "minimum": 0 },
+        "hiddenInPrintReferenceCount": { "type": "integer", "minimum": 0 },
+        "hiddenInExportReferenceCount": { "type": "integer", "minimum": 0 },
+        "evaluationFailureCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "unicodeProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scripts",
+        "rightToLeftCharacterCount",
+        "combiningMarkCount",
+        "nonBmpCharacterCount",
+        "variationSelectorCount",
+        "zeroWidthJoinerCount",
+        "bidiControlCount"
+      ],
+      "properties": {
+        "scripts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "rightToLeftCharacterCount": { "type": "integer", "minimum": 0 },
+        "combiningMarkCount": { "type": "integer", "minimum": 0 },
+        "nonBmpCharacterCount": { "type": "integer", "minimum": 0 },
+        "variationSelectorCount": { "type": "integer", "minimum": 0 },
+        "zeroWidthJoinerCount": { "type": "integer", "minimum": 0 },
+        "bidiControlCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "spatialEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessed",
+        "pageWidthPoints",
+        "pageHeightPoints",
+        "rotationDegrees",
+        "coordinateSpace",
+        "totalLocationCount",
+        "locationsTruncated",
+        "locations"
+      ],
+      "properties": {
+        "assessed": { "type": "boolean" },
+        "pageWidthPoints": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "pageHeightPoints": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "rotationDegrees": {
+          "type": ["integer", "null"],
+          "enum": [0, 90, 180, 270, null]
+        },
+        "coordinateSpace": {
+          "type": ["string", "null"],
+          "enum": ["TOP_LEFT_DISPLAY_POINTS", null]
+        },
+        "totalLocationCount": { "type": "integer", "minimum": 0 },
+        "locationsTruncated": { "type": "boolean" },
+        "locations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/findingLocation" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "assessed": { "const": true } },
+            "required": ["assessed"]
+          },
+          "then": {
+            "properties": {
+              "pageWidthPoints": { "type": "number", "exclusiveMinimum": 0 },
+              "pageHeightPoints": { "type": "number", "exclusiveMinimum": 0 },
+              "rotationDegrees": { "type": "integer", "enum": [0, 90, 180, 270] },
+              "coordinateSpace": { "const": "TOP_LEFT_DISPLAY_POINTS" }
+            }
+          },
+          "else": {
+            "properties": {
+              "pageWidthPoints": { "type": "null" },
+              "pageHeightPoints": { "type": "null" },
+              "rotationDegrees": { "type": "null" },
+              "coordinateSpace": { "type": "null" },
+              "totalLocationCount": { "const": 0 },
+              "locationsTruncated": { "const": false },
+              "locations": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
+    },
+    "findingLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "xPoints", "yPoints", "widthPoints", "heightPoints"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "MISSING_UNICODE",
+            "REPLACEMENT_CHARACTERS",
+            "TINY_TEXT",
+            "IMPLICIT_COMPOSITE_UNICODE_MAPPING",
+            "RTL_TEXT_REQUIRES_EXTRACTION_PROFILE"
+          ]
+        },
+        "xPoints": { "type": "number" },
+        "yPoints": { "type": "number" },
+        "widthPoints": { "type": "number", "minimum": 0 },
+        "heightPoints": { "type": "number", "minimum": 0 }
+      }
+    },
+    "font": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name", "subtype", "encoding", "embedded", "damaged", "vertical",
+        "toUnicodePresent", "subset", "glyphCount", "rawUnmappedGlyphCount"
+      ],
+      "properties": {
+        "name": { "type": "string" },
+        "subtype": { "type": "string" },
+        "encoding": { "type": "string" },
+        "embedded": { "type": "boolean" },
+        "damaged": { "type": "boolean" },
+        "vertical": { "type": "boolean" },
+        "toUnicodePresent": { "type": "boolean" },
+        "subset": { "type": "boolean" },
+        "glyphCount": { "type": "integer", "minimum": 0 },
+        "rawUnmappedGlyphCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "description"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "NO_TEXT_LAYER",
+            "MISSING_UNICODE",
+            "REPLACEMENT_CHARACTERS",
+            "TINY_TEXT",
+            "MALFORMED_TOUNICODE_CMAP",
+            "INVALID_TOUNICODE_CMAP",
+            "IMPLICIT_COMPOSITE_UNICODE_MAPPING",
+            "READING_ORDER_DIVERGENCE",
+            "SPARSE_TEXT_OVER_FULL_PAGE_IMAGE",
+            "PARTIAL_TEXT_OVER_FULL_PAGE_IMAGE",
+            "RTL_TEXT_REQUIRES_EXTRACTION_PROFILE",
+            "ANNOTATION_MISSING_UNICODE",
+            "ANNOTATION_REPLACEMENT_CHARACTERS"
+          ]
+        },
+        "description": { "type": "string" }
+      }
+    }
+  }
+}

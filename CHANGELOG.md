@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.7.0 — 2026-08-02
+
+- Add report and GitHub Action schemas v3 with display-oriented page geometry
+  and bounded, text-free finding locations.
+- Localize missing Unicode, replacement characters, tiny text, implicit
+  composite mappings, and RTL-profile evidence without retaining document
+  text or font names.
+- Limit location samples to eight per finding per page while preserving an
+  uncapped total and an explicit truncation flag.
+- Keep report and Action schemas v1/v2 published for existing consumers.
+
 ## 0.6.2 — 2026-08-01
 
 - Capture stream-order and position-order evidence in one PDFBox text pass,

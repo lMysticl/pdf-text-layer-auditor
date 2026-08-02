@@ -4,7 +4,7 @@ import java.io.PrintStream;
 import java.util.Objects;
 
 public final class JsonReportPrinter {
-    public static final int SCHEMA_VERSION = 2;
+    public static final int SCHEMA_VERSION = 3;
 
     public void print(AuditReport report, PrintStream out) {
         Objects.requireNonNull(report, "report");
@@ -121,6 +121,7 @@ public final class JsonReportPrinter {
         appendAnnotationAppearances(json, page.annotationAppearances());
         appendOptionalContent(json, page.optionalContent());
         appendUnicodeProfile(json, page.unicodeProfile());
+        appendSpatialEvidence(json, page.spatialEvidence());
         appendBooleanProperty(json, "needsAttention", page.needsAttention());
         json.append(",\"fonts\":[");
 
@@ -330,6 +331,36 @@ public final class JsonReportPrinter {
         json.append('}');
     }
 
+    private static void appendSpatialEvidence(
+            StringBuilder json,
+            SpatialEvidenceAudit spatial
+    ) {
+        appendPropertyPrefix(json, "spatialEvidence");
+        json.append('{');
+        appendBooleanProperty(json, "assessed", spatial.assessed());
+        appendNullableDecimalProperty(json, "pageWidthPoints", spatial.pageWidthPoints());
+        appendNullableDecimalProperty(json, "pageHeightPoints", spatial.pageHeightPoints());
+        appendNullableNumberProperty(json, "rotationDegrees", spatial.rotationDegrees());
+        appendNullableStringProperty(json, "coordinateSpace", spatial.coordinateSpace());
+        appendNumberProperty(json, "totalLocationCount", spatial.totalLocationCount());
+        appendBooleanProperty(json, "locationsTruncated", spatial.locationsTruncated());
+        json.append(",\"locations\":[");
+        for (int index = 0; index < spatial.locations().size(); index++) {
+            if (index > 0) {
+                json.append(',');
+            }
+            FindingLocation location = spatial.locations().get(index);
+            json.append('{');
+            appendStringProperty(json, "code", location.code().name());
+            appendDecimalProperty(json, "xPoints", location.xPoints());
+            appendDecimalProperty(json, "yPoints", location.yPoints());
+            appendDecimalProperty(json, "widthPoints", location.widthPoints());
+            appendDecimalProperty(json, "heightPoints", location.heightPoints());
+            json.append('}');
+        }
+        json.append("]}");
+    }
+
     private static void appendFont(StringBuilder json, FontAudit font) {
         json.append('{');
         appendStringProperty(json, "name", font.name());
@@ -355,6 +386,19 @@ public final class JsonReportPrinter {
     private static void appendStringProperty(StringBuilder json, String name, String value) {
         appendPropertyPrefix(json, name);
         appendQuoted(json, value);
+    }
+
+    private static void appendNullableStringProperty(
+            StringBuilder json,
+            String name,
+            String value
+    ) {
+        appendPropertyPrefix(json, name);
+        if (value == null) {
+            json.append("null");
+        } else {
+            appendQuoted(json, value);
+        }
     }
 
     private static void appendNumberProperty(StringBuilder json, String name, long value) {
@@ -409,6 +453,11 @@ public final class JsonReportPrinter {
     private static void appendDecimalProperty(StringBuilder json, String name, float value) {
         appendPropertyPrefix(json, name);
         json.append(Float.toString(value));
+    }
+
+    private static void appendDecimalProperty(StringBuilder json, String name, double value) {
+        appendPropertyPrefix(json, name);
+        json.append(Double.toString(value));
     }
 
     private static void appendPropertyPrefix(StringBuilder json, String name) {
