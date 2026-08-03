@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add report and GitHub Action schemas v5 with exact, text-free
+  `ANNOTATION` and `FORM_FIELD` regions alongside `IMAGE` regions.
+- Keep up to 32 region samples per object type so image-heavy pages cannot
+  displace annotation or form-field evidence.
+- Exclude hidden, invisible, `NoView`, disabled optional-content, outside-crop,
+  and rectangle-less annotations without retaining annotation contents, form
+  values, or names.
+- Keep schemas v1-v4 published for existing consumers.
+
+## 0.8.0 — 2026-08-02
+
 - Add report and GitHub Action schemas v4 with bounded, text-free `IMAGE`
   regions in top-left display coordinates.
 - Preserve exact visible-image counts with explicit truncation while limiting
