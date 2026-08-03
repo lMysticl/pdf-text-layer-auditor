@@ -47,6 +47,7 @@ import org.apache.pdfbox.util.Vector;
 final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     private static final int SPATIAL_GRID_SIZE = 8;
     private static final int TILED_IMAGE_UNION_THRESHOLD = 64;
+    private static final int MAX_VISUAL_REGION_SAMPLES = 32;
     private static final COSName OPTIONAL_CONTENT = COSName.getPDFName("OC");
     private static final COSName OPTIONAL_CONTENT_GROUP = COSName.getPDFName("OCG");
     private static final COSName OPTIONAL_CONTENT_MEMBERSHIP = COSName.getPDFName("OCMD");
@@ -58,6 +59,8 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     private double maxImageCoverageRatio;
     private final AdaptiveAreaUnion combinedImageArea;
     private final Set<Integer> imageGridCells = new HashSet<>();
+    private final List<VisualRegion> visualRegions = new ArrayList<>();
+    private long totalVisualRegionCount;
     private final Set<Integer> visibleTextGridCells = new HashSet<>();
     private int paintedVectorPathCount;
     private boolean optionalContentPresent;
@@ -160,7 +163,10 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
                             analyzer.hiddenInViewReferenceCount,
                             analyzer.hiddenInPrintReferenceCount,
                             analyzer.hiddenInExportReferenceCount,
-                            analyzer.optionalContentEvaluationFailureCount)));
+                            analyzer.optionalContentEvaluationFailureCount),
+                    VisualRegionAudit.of(
+                            analyzer.totalVisualRegionCount,
+                            analyzer.visualRegions)));
         }
         return results;
     }
@@ -303,6 +309,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
                 Math.max(0, Math.min(1, coverage)));
         combinedImageArea.add(paintedArea);
         recordImageGridCells(paintedArea);
+        recordImageRegion(paintedArea);
     }
 
     @Override
@@ -692,6 +699,97 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         }
     }
 
+    private void recordImageRegion(Area paintedArea) {
+        if (paintedArea.isEmpty()) {
+            return;
+        }
+        VisualRegion region = toDisplayRegion(
+                getPage().getCropBox(),
+                getPage().getRotation(),
+                paintedArea.getBounds2D());
+        if (region == null) {
+            return;
+        }
+        totalVisualRegionCount++;
+        if (visualRegions.size() < MAX_VISUAL_REGION_SAMPLES) {
+            visualRegions.add(region);
+        }
+    }
+
+    private static VisualRegion toDisplayRegion(
+            PDRectangle crop,
+            int pageRotation,
+            Rectangle2D pdfBounds
+    ) {
+        if (crop == null
+                || pdfBounds == null
+                || pdfBounds.isEmpty()
+                || crop.getWidth() <= 0
+                || crop.getHeight() <= 0) {
+            return null;
+        }
+        int rotation = Math.floorMod(pageRotation, 360);
+        if (rotation % 90 != 0) {
+            return null;
+        }
+        double pdfX = pdfBounds.getMinX() - crop.getLowerLeftX();
+        double pdfY = pdfBounds.getMinY() - crop.getLowerLeftY();
+        double pdfWidth = pdfBounds.getWidth();
+        double pdfHeight = pdfBounds.getHeight();
+        double displayWidth = rotation == 90 || rotation == 270
+                ? crop.getHeight() : crop.getWidth();
+        double displayHeight = rotation == 90 || rotation == 270
+                ? crop.getWidth() : crop.getHeight();
+        double x;
+        double y;
+        double width;
+        double height;
+        switch (rotation) {
+            case 0 -> {
+                x = pdfX;
+                y = displayHeight - (pdfY + pdfHeight);
+                width = pdfWidth;
+                height = pdfHeight;
+            }
+            case 90 -> {
+                x = pdfY;
+                y = pdfX;
+                width = pdfHeight;
+                height = pdfWidth;
+            }
+            case 180 -> {
+                x = displayWidth - (pdfX + pdfWidth);
+                y = pdfY;
+                width = pdfWidth;
+                height = pdfHeight;
+            }
+            case 270 -> {
+                x = displayWidth - (pdfY + pdfHeight);
+                y = displayHeight - (pdfX + pdfWidth);
+                width = pdfHeight;
+                height = pdfWidth;
+            }
+            default -> throw new IllegalStateException("Unexpected normalized page rotation");
+        }
+        double boundedX = Math.max(0, Math.min(x, displayWidth));
+        double boundedY = Math.max(0, Math.min(y, displayHeight));
+        double boundedWidth = Math.max(0, Math.min(width, displayWidth - boundedX));
+        double boundedHeight = Math.max(0, Math.min(height, displayHeight - boundedY));
+        if (boundedWidth <= 0 || boundedHeight <= 0) {
+            return null;
+        }
+        return new VisualRegion(
+                VisualRegionType.IMAGE,
+                rounded(boundedX),
+                rounded(boundedY),
+                rounded(boundedWidth),
+                rounded(boundedHeight));
+    }
+
+    private static double rounded(double value) {
+        return Math.rint(value * 1_000d) / 1_000d;
+    }
+
     private void recordVisibleTextGridCell(double x, double y) {
         PDRectangle crop = getPage().getCropBox();
         if (crop.getWidth() <= 0 || crop.getHeight() <= 0) {
@@ -722,7 +820,8 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
             VisualContentAudit visualContent,
             GeometryVisibilityAudit geometryVisibility,
             AnnotationAppearanceAudit annotationAppearances,
-            OptionalContentAudit optionalContent
+            OptionalContentAudit optionalContent,
+            VisualRegionAudit visualRegions
     ) {
     }
 

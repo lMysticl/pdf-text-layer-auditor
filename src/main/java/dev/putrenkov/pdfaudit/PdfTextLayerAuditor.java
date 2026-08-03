@@ -778,12 +778,12 @@ public final class PdfTextLayerAuditor {
                             variationSelectorCount,
                             zeroWidthJoinerCount,
                             bidiControlCount),
-                    spatialEvidence(),
+                    spatialEvidence(visualEvidence.visualRegions()),
                     fontAudits,
                     findings);
         }
 
-        private SpatialEvidenceAudit spatialEvidence() {
+        private SpatialEvidenceAudit spatialEvidence(VisualRegionAudit visualRegions) {
             if (!geometryAssessed) {
                 return SpatialEvidenceAudit.unassessed();
             }
@@ -796,7 +796,8 @@ public final class PdfTextLayerAuditor {
                     pageHeightPoints,
                     pageRotationDegrees,
                     totalLocationCount,
-                    locations);
+                    locations,
+                    visualRegions);
         }
 
         private static FontDescriptor describeFont(PDFont font) {

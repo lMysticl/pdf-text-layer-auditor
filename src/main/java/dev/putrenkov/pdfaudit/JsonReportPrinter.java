@@ -4,7 +4,7 @@ import java.io.PrintStream;
 import java.util.Objects;
 
 public final class JsonReportPrinter {
-    public static final int SCHEMA_VERSION = 3;
+    public static final int SCHEMA_VERSION = 4;
 
     public void print(AuditReport report, PrintStream out) {
         Objects.requireNonNull(report, "report");
@@ -356,6 +356,39 @@ public final class JsonReportPrinter {
             appendDecimalProperty(json, "yPoints", location.yPoints());
             appendDecimalProperty(json, "widthPoints", location.widthPoints());
             appendDecimalProperty(json, "heightPoints", location.heightPoints());
+            json.append('}');
+        }
+        json.append(']');
+        appendVisualRegions(json, spatial.visualRegions());
+        json.append('}');
+    }
+
+    private static void appendVisualRegions(
+            StringBuilder json,
+            VisualRegionAudit visualRegions
+    ) {
+        appendPropertyPrefix(json, "visualRegions");
+        json.append('{');
+        appendNumberProperty(
+                json,
+                "totalRegionCount",
+                visualRegions.totalRegionCount());
+        appendBooleanProperty(
+                json,
+                "regionsTruncated",
+                visualRegions.regionsTruncated());
+        json.append(",\"regions\":[");
+        for (int index = 0; index < visualRegions.regions().size(); index++) {
+            if (index > 0) {
+                json.append(',');
+            }
+            VisualRegion region = visualRegions.regions().get(index);
+            json.append('{');
+            appendStringProperty(json, "type", region.type().name());
+            appendDecimalProperty(json, "xPoints", region.xPoints());
+            appendDecimalProperty(json, "yPoints", region.yPoints());
+            appendDecimalProperty(json, "widthPoints", region.widthPoints());
+            appendDecimalProperty(json, "heightPoints", region.heightPoints());
             json.append('}');
         }
         json.append("]}");
