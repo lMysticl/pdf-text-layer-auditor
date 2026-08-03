@@ -15,6 +15,8 @@
 - Exclude hidden, invisible, `NoView`, disabled optional-content, outside-crop,
   and rectangle-less annotations without retaining annotation contents, form
   values, names, extracted text, or image bytes.
+- Normalize tracked text and archive timestamps, and require two clean CI
+  builds to produce byte-identical executable JAR and CycloneDX SBOM artifacts.
 - Keep schemas v1-v5 published for existing consumers.
 
 ## 0.7.0 — 2026-08-02

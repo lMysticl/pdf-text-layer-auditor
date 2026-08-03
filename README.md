@@ -359,7 +359,12 @@ category-based: no finite test suite can enumerate every font file or every Unic
 `mvn verify` enforces code-coverage floors and writes the HTML report to
 `target/site/jacoco/index.html`.
 
-`mvn verify` also creates a CycloneDX 1.6 software bill of materials at `target/bom.json`. Tagged releases publish the SBOM beside the executable JAR and checksum. Release artifacts include signed build-provenance attestations that can be verified with:
+`mvn verify` also creates a CycloneDX 1.6 software bill of materials at `target/bom.json`.
+Tracked text and archive timestamps are normalized so clean checkouts produce the
+same bytes, and CI requires two clean builds to produce byte-identical executable
+JAR and SBOM files. Tagged releases publish the SBOM beside the executable JAR and
+checksum. Release artifacts include signed build-provenance attestations that can
+be verified with:
 
 ```bash
 gh attestation verify pdf-text-layer-auditor.jar --repo lMysticl/pdf-text-layer-auditor
