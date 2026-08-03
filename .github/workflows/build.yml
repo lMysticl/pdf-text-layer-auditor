@@ -21,7 +21,23 @@ jobs:
           java-version: "21"
           cache: maven
       - name: Build and test
-        run: mvn --batch-mode --no-transfer-progress verify
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Verify reproducible release artifacts
+        shell: bash
+        run: |
+          evidence_dir="$(mktemp -d "${RUNNER_TEMP}/pdf-auditor-repro.XXXXXX")"
+          trap 'rm -rf "${evidence_dir}"' EXIT
+
+          cp target/pdf-text-layer-auditor.jar "${evidence_dir}/first.jar"
+          cp target/bom.json "${evidence_dir}/first-bom.json"
+
+          mvn --batch-mode --no-transfer-progress clean verify
+
+          cmp "${evidence_dir}/first.jar" target/pdf-text-layer-auditor.jar
+          cmp "${evidence_dir}/first-bom.json" target/bom.json
+          sha256sum "${evidence_dir}/first.jar" target/pdf-text-layer-auditor.jar
+          sha256sum "${evidence_dir}/first-bom.json" target/bom.json
 
   action-smoke:
     if: github.event_name == 'pull_request'
