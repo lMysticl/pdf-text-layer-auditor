@@ -200,13 +200,15 @@ remain page-level until a defensible smaller region can be derived.
 bounds. It keeps
 at most 32 samples per object type on each page, reports exact per-type and
 total counts, and sets `regionsTruncated` when any additional region is omitted.
-Image regions are crop- and clip-intersected painted bounds. Annotation and form
-field regions are view-visible, non-empty annotation/widget rectangles
+Image regions are crop- and clip-intersected painted bounds; hidden optional
+content and fully transparent image painting do not create a region. Annotation
+and form field regions are view-visible, non-empty annotation/widget rectangles
 intersected with the crop box; hidden, invisible, `NoView`, disabled optional
 content, outside-crop, and rectangle-less objects are excluded. Vector paths
 include visible fill and stroke envelopes after the current transformation,
-crop, and clipping path. Fully transparent, all-zero-dash, fully clipped, and
-outside-crop paths are excluded. Shading operations without a locatable path
+crop, and clipping path. Hidden optional content, fully transparent,
+all-zero-dash, fully clipped, and outside-crop paths are excluded. Shading
+operations without a locatable path
 remain in `paintedVectorPathCount` but do not create a region. A region is
 location evidence, not a claim that every
 pixel inside the rectangle contains text. Annotation contents, form values,

@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.image.BufferedImage;
+import java.awt.BasicStroke;
+import java.awt.geom.Line2D;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -21,6 +23,7 @@ import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSStream;
 import org.apache.pdfbox.cos.COSString;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDFormContentStream;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.PDResources;
@@ -424,6 +427,111 @@ class PdfTextLayerAuditorTest {
         assertTrue(truncatedRegions.regionsTruncated());
         assertEquals(33, truncated.visualContent().paintedVectorPathCount());
         assertTrue(JsonReportPrinter.toJson(report).contains("\"vectorPathCount\":33"));
+    }
+
+    @Test
+    void excludesHiddenOptionalContentAndTransparentPaintFromVisualRegions()
+            throws IOException {
+        Path pdf = temporaryDirectory.resolve("visible-region-filtering.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(new PDRectangle(200, 200));
+            document.addPage(page);
+
+            PDOptionalContentGroup off = new PDOptionalContentGroup("off");
+            PDOptionalContentProperties properties = new PDOptionalContentProperties();
+            properties.addGroup(off);
+            properties.setGroupEnabled(off, false);
+            document.getDocumentCatalog().setOCProperties(properties);
+
+            BufferedImage pixel = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+            var visibleImage = LosslessFactory.createFromImage(document, pixel);
+            var hiddenImage = LosslessFactory.createFromImage(document, pixel);
+            hiddenImage.setOptionalContent(off);
+
+            PDFormXObject hiddenForm = new PDFormXObject(new PDStream(document));
+            hiddenForm.setBBox(new PDRectangle(20, 20));
+            hiddenForm.setResources(new PDResources());
+            hiddenForm.setOptionalContent(off);
+            try (PDFormContentStream formContent = new PDFormContentStream(hiddenForm)) {
+                formContent.addRect(0, 0, 20, 20);
+                formContent.fill();
+            }
+
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.drawImage(visibleImage, 10, 10, 20, 20);
+
+                content.beginMarkedContent(COSName.OC, off);
+                content.drawImage(visibleImage, 40, 10, 20, 20);
+                content.endMarkedContent();
+
+                content.drawImage(hiddenImage, 70, 10, 20, 20);
+                content.saveGraphicsState();
+                content.transform(Matrix.getTranslateInstance(70, 100));
+                content.drawForm(hiddenForm);
+                content.restoreGraphicsState();
+
+                PDExtendedGraphicsState transparent = new PDExtendedGraphicsState();
+                transparent.setNonStrokingAlphaConstant(0f);
+                content.saveGraphicsState();
+                content.setGraphicsStateParameters(transparent);
+                content.drawImage(visibleImage, 100, 10, 20, 20);
+                content.restoreGraphicsState();
+
+                content.addRect(10, 100, 20, 20);
+                content.fill();
+
+                content.beginMarkedContent(COSName.OC, off);
+                content.addRect(40, 100, 20, 20);
+                content.fill();
+                content.endMarkedContent();
+            }
+            document.save(pdf.toFile());
+        }
+
+        PageAudit page = new PdfTextLayerAuditor().audit(pdf).pages().getFirst();
+        VisualRegionAudit visualRegions = page.spatialEvidence().visualRegions();
+
+        assertEquals(2, visualRegions.totalRegionCount());
+        assertEquals(1, visualRegions.counts().imageCount());
+        assertEquals(1, visualRegions.counts().vectorPathCount());
+        assertEquals(2, visualRegions.regions().size());
+    }
+
+    @Test
+    void matchesPdfBoxDashNormalizationForVisualStrokeEnvelope() throws IOException {
+        Path pdf = temporaryDirectory.resolve("zero-containing-dash.pdf");
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(new PDRectangle(200, 200));
+            document.addPage(page);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.setLineWidth(2);
+                content.setLineDashPattern(new float[]{0, 10}, 0);
+                content.moveTo(10, 150);
+                content.lineTo(70, 150);
+                content.stroke();
+            }
+            document.save(pdf.toFile());
+        }
+
+        VisualRegion actual = new PdfTextLayerAuditor().audit(pdf)
+                .pages().getFirst().spatialEvidence().visualRegions().regions().getFirst();
+        var expectedBounds = new BasicStroke(
+                2,
+                BasicStroke.CAP_BUTT,
+                BasicStroke.JOIN_MITER,
+                10,
+                new float[]{0.062f, 10},
+                0)
+                .createStrokedShape(new Line2D.Float(10, 150, 70, 150))
+                .getBounds2D();
+
+        assertRegion(
+                actual,
+                VisualRegionType.VECTOR_PATH,
+                expectedBounds.getX(),
+                200 - expectedBounds.getMaxY(),
+                expectedBounds.getWidth(),
+                expectedBounds.getHeight());
     }
 
     private static void assertImageRegion(

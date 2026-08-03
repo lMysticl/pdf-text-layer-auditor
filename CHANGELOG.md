@@ -2,22 +2,20 @@
 
 ## Unreleased
 
-- Add report and GitHub Action schemas v5 with exact, text-free
-  `ANNOTATION` and `FORM_FIELD` regions alongside `IMAGE` regions.
-- Keep up to 32 region samples per object type so image-heavy pages cannot
-  displace annotation or form-field evidence.
+## 0.10.0 — 2026-08-03
+
+- Add report and GitHub Action schemas v4-v6 with bounded, text-free `IMAGE`,
+  `ANNOTATION`, `FORM_FIELD`, and `VECTOR_PATH` regions in top-left display
+  coordinates.
+- Preserve exact per-type counts and keep up to 32 samples per object type so
+  dense image or path pages cannot displace other evidence.
+- Exclude hidden optional content, fully transparent painting, fully clipped
+  and outside-crop geometry; normalize zero-containing stroke dashes exactly as
+  PDFBox 3.0.8 does before deriving a path envelope.
 - Exclude hidden, invisible, `NoView`, disabled optional-content, outside-crop,
   and rectangle-less annotations without retaining annotation contents, form
-  values, or names.
-- Keep schemas v1-v4 published for existing consumers.
-
-## 0.8.0 — 2026-08-02
-
-- Add report and GitHub Action schemas v4 with bounded, text-free `IMAGE`
-  regions in top-left display coordinates.
-- Preserve exact visible-image counts with explicit truncation while limiting
-  stored image bounds to 32 per page.
-- Keep schemas v1-v3 published for existing consumers.
+  values, names, extracted text, or image bytes.
+- Keep schemas v1-v5 published for existing consumers.
 
 ## 0.7.0 — 2026-08-02
 

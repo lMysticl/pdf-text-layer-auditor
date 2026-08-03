@@ -30,6 +30,7 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.documentinterchange.markedcontent.PDPropertyList;
 import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
+import org.apache.pdfbox.pdmodel.graphics.form.PDTransparencyGroup;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImage;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.font.PDFont;
@@ -90,6 +91,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     private int hiddenInPrintReferenceCount;
     private int hiddenInExportReferenceCount;
     private int optionalContentEvaluationFailureCount;
+    private int hiddenVisualContentDepth;
 
     private PageVisualAnalyzer(
             PDPage page,
@@ -271,13 +273,30 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
 
     @Override
     public void beginMarkedContentSequence(COSName tag, COSDictionary properties) {
-        if (OPTIONAL_CONTENT.equals(tag) || isOptionalContent(properties)) {
+        if (hiddenVisualContentDepth > 0) {
+            hiddenVisualContentDepth++;
+        } else if (OPTIONAL_CONTENT.equals(tag) || isOptionalContent(properties)) {
             optionalContentPresent = true;
-            recordOptionalContent(properties == null
+            PDPropertyList optionalContent = properties == null
                     ? null
-                    : PDPropertyList.create(properties));
+                    : PDPropertyList.create(properties);
+            recordOptionalContent(optionalContent);
+            if (optionalContent == null || !isVisibleInView(optionalContent)) {
+                hiddenVisualContentDepth = 1;
+            }
         }
         super.beginMarkedContentSequence(tag, properties);
+    }
+
+    @Override
+    public void endMarkedContentSequence() {
+        try {
+            super.endMarkedContentSequence();
+        } finally {
+            if (hiddenVisualContentDepth > 0) {
+                hiddenVisualContentDepth--;
+            }
+        }
     }
 
     @Override
@@ -288,10 +307,14 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
                     AuditWorkLimitException.Code.IMAGE_COUNT,
                     workLimits.maximumImageCount());
         }
+        boolean regionVisible = hiddenVisualContentDepth == 0
+                && getGraphicsState().getNonStrokeAlphaConstant() > 0;
         if (image instanceof PDImageXObject imageXObject
                 && imageXObject.getOptionalContent() != null) {
             optionalContentPresent = true;
-            recordOptionalContent(imageXObject.getOptionalContent());
+            PDPropertyList optionalContent = imageXObject.getOptionalContent();
+            recordOptionalContent(optionalContent);
+            regionVisible &= isVisibleInView(optionalContent);
         }
 
         Area paintedArea = new Area(getGraphicsState()
@@ -317,16 +340,49 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
                 Math.max(0, Math.min(1, coverage)));
         combinedImageArea.add(paintedArea);
         recordImageGridCells(paintedArea);
-        recordVisualRegion(VisualRegionType.IMAGE, paintedArea);
+        if (regionVisible) {
+            recordVisualRegion(VisualRegionType.IMAGE, paintedArea);
+        }
     }
 
     @Override
     public void showForm(PDFormXObject form) throws IOException {
+        boolean hidden = false;
         if (form.getOptionalContent() != null) {
             optionalContentPresent = true;
             recordOptionalContent(form.getOptionalContent());
+            hidden = !isVisibleInView(form.getOptionalContent());
         }
-        super.showForm(form);
+        if (hidden) {
+            hiddenVisualContentDepth++;
+        }
+        try {
+            super.showForm(form);
+        } finally {
+            if (hidden) {
+                hiddenVisualContentDepth--;
+            }
+        }
+    }
+
+    @Override
+    public void showTransparencyGroup(PDTransparencyGroup form) throws IOException {
+        boolean hidden = false;
+        if (form.getOptionalContent() != null) {
+            optionalContentPresent = true;
+            recordOptionalContent(form.getOptionalContent());
+            hidden = !isVisibleInView(form.getOptionalContent());
+        }
+        if (hidden) {
+            hiddenVisualContentDepth++;
+        }
+        try {
+            super.showTransparencyGroup(form);
+        } finally {
+            if (hidden) {
+                hiddenVisualContentDepth--;
+            }
+        }
     }
 
     @Override
@@ -412,6 +468,9 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     }
 
     private void recordPaintedPathRegion(boolean fill, boolean stroke) {
+        if (hiddenVisualContentDepth > 0) {
+            return;
+        }
         Area paintedArea = new Area();
         if (fill && getGraphicsState().getNonStrokeAlphaConstant() > 0) {
             paintedArea.add(new Area(currentPath));
@@ -439,8 +498,8 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     }
 
     /**
-     * Mirrors PDFBox's page-renderer stroke geometry in page coordinates. Invalid or zero-containing
-     * dash arrays use the solid path envelope, while an all-zero dash is not visible at all.
+     * Mirrors PDFBox's page-renderer stroke geometry in page coordinates. Non-finite dash arrays
+     * use the solid path envelope, while an all-zero dash is not visible at all.
      */
     private BasicStroke currentStroke() {
         float lineWidth = transformWidth(getGraphicsState().getLineWidth());
@@ -483,13 +542,14 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
 
     private boolean transformDashArray(float[] dashArray) {
         for (int index = 0; index < dashArray.length; index++) {
-            if (!Float.isFinite(dashArray[index]) || dashArray[index] <= 0) {
+            if (!Float.isFinite(dashArray[index])) {
                 return false;
             }
             dashArray[index] = transformWidth(dashArray[index]);
-            if (!Float.isFinite(dashArray[index]) || dashArray[index] <= 0) {
+            if (!Float.isFinite(dashArray[index])) {
                 return false;
             }
+            dashArray[index] = Math.max(dashArray[index], 0.062f);
         }
         return true;
     }
@@ -607,6 +667,14 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
             return 0;
         }
         return hidden ? 1 : 0;
+    }
+
+    private boolean isVisibleInView(PDPropertyList propertyList) {
+        return Boolean.FALSE.equals(isHidden(
+                propertyList,
+                RenderDestination.VIEW,
+                0,
+                identitySet()));
     }
 
     private Boolean isHidden(
