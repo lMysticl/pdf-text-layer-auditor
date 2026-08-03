@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.networknt.schema.InputFormat;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.SpecificationVersion;
@@ -17,7 +18,7 @@ class JsonReportPrinterTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
-    void serializesCompleteVersionFiveReportAndEscapesStrings() throws Exception {
+    void serializesCompleteVersionSixReportAndEscapesStrings() throws Exception {
         PageAudit page = new PageAudit(
                 1,
                 4,
@@ -39,7 +40,7 @@ class JsonReportPrinterTest {
         String json = JsonReportPrinter.toJson(report);
         var root = MAPPER.readTree(json);
 
-        assertEquals(5, root.path("schemaVersion").asInt());
+        assertEquals(6, root.path("schemaVersion").asInt());
         assertEquals("A\"B\\C\n\u0001\uD83D\uDE00",
                 root.path("pages").path(0).path("fonts").path(0).path("name").asText());
         assertTrue(root.path("parseHealth").path("complete").asBoolean());
@@ -55,8 +56,13 @@ class JsonReportPrinterTest {
                 .path("visualRegions").path("totalRegionCount").asInt());
         assertEquals(0, root.path("pages").path(0).path("spatialEvidence")
                 .path("visualRegions").path("counts").path("imageCount").asInt());
+        assertEquals(0, root.path("pages").path(0).path("spatialEvidence")
+                .path("visualRegions").path("counts").path("vectorPathCount").asInt());
 
-        assertValidAgainst("report-schema-v5.json", json);
+        assertValidAgainst("report-schema-v6.json", json);
+        ObjectNode versionFiveShape = root.deepCopy();
+        versionFiveShape.put("schemaVersion", 5);
+        assertInvalidAgainst("report-schema-v5.json", versionFiveShape.toString());
     }
 
     @Test
@@ -72,7 +78,7 @@ class JsonReportPrinterTest {
 
         var root = MAPPER.readTree(JsonReportPrinter.toJson(report));
 
-        assertEquals(5, root.path("schemaVersion").asInt());
+        assertEquals(6, root.path("schemaVersion").asInt());
         assertEquals(0, root.path("pages").size());
         assertEquals(0, root.path("parseHealth").path("diagnostics").size());
     }
@@ -97,5 +103,15 @@ class JsonReportPrinterTest {
         var errors = registry.getSchema(schemaDocument).validate(json, InputFormat.JSON);
 
         assertTrue(errors.isEmpty(), errors::toString);
+    }
+
+    private static void assertInvalidAgainst(String schemaName, String json) throws Exception {
+        String schemaDocument = Files.readString(Path.of("docs", schemaName));
+        SchemaRegistry registry =
+                SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12);
+
+        var errors = registry.getSchema(schemaDocument).validate(json, InputFormat.JSON);
+
+        assertFalse(errors.isEmpty());
     }
 }

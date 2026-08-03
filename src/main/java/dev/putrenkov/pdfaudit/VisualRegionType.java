@@ -6,5 +6,6 @@ package dev.putrenkov.pdfaudit;
 public enum VisualRegionType {
     IMAGE,
     ANNOTATION,
-    FORM_FIELD
+    FORM_FIELD,
+    VECTOR_PATH
 }

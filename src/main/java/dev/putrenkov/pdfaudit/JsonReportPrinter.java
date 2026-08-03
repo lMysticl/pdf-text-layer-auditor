@@ -4,7 +4,7 @@ import java.io.PrintStream;
 import java.util.Objects;
 
 public final class JsonReportPrinter {
-    public static final int SCHEMA_VERSION = 5;
+    public static final int SCHEMA_VERSION = 6;
 
     public void print(AuditReport report, PrintStream out) {
         Objects.requireNonNull(report, "report");
@@ -388,6 +388,10 @@ public final class JsonReportPrinter {
                 json,
                 "formFieldCount",
                 visualRegions.counts().formFieldCount());
+        appendNumberProperty(
+                json,
+                "vectorPathCount",
+                visualRegions.counts().vectorPathCount());
         json.append('}');
         json.append(",\"regions\":[");
         for (int index = 0; index < visualRegions.regions().size(); index++) {
