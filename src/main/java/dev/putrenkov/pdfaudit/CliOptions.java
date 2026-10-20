@@ -1,7 +1,9 @@
 package dev.putrenkov.pdfaudit;
 
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 
 record CliOptions(
         Mode mode,
@@ -12,7 +14,12 @@ record CliOptions(
         float tinyTextThresholdPoints,
         PageSelection pageSelection
 ) {
-    private static final long BYTES_PER_MEBIBYTE = 1024L * 1024;
+    private static final Set<String> SINGLE_USE_OPTIONS = Set.of(
+            "--json",
+            "--max-file-size-mib",
+            "--max-pages",
+            "--tiny-text-threshold-pt",
+            "--pages");
 
     static CliOptions parse(String[] arguments) {
         Objects.requireNonNull(arguments, "arguments");
@@ -26,11 +33,8 @@ record CliOptions(
             }
         }
 
+        Set<String> seen = new HashSet<>();
         boolean json = false;
-        boolean maxFileSizeSpecified = false;
-        boolean maxPageCountSpecified = false;
-        boolean tinyTextThresholdSpecified = false;
-        boolean pageSelectionSpecified = false;
         long maxFileSizeBytes = PdfTextLayerAuditor.DEFAULT_MAX_FILE_SIZE_BYTES;
         int maxPageCount = PdfTextLayerAuditor.DEFAULT_MAX_PAGE_COUNT;
         float tinyTextThresholdPoints =
@@ -43,49 +47,21 @@ record CliOptions(
                 throw new IllegalArgumentException("Arguments must not be null");
             }
 
+            if (SINGLE_USE_OPTIONS.contains(argument) && !seen.add(argument)) {
+                throw new IllegalArgumentException(argument + " may only be specified once");
+            }
+
             switch (argument) {
-                case "--json" -> {
-                    if (json) {
-                        throw new IllegalArgumentException("--json may only be specified once");
-                    }
-                    json = true;
-                }
-                case "--max-file-size-mib" -> {
-                    if (maxFileSizeSpecified) {
-                        throw new IllegalArgumentException(
-                                "--max-file-size-mib may only be specified once");
-                    }
-                    String value = requireValue(arguments, ++index, argument);
-                    maxFileSizeBytes = parseMebibytes(value, argument);
-                    maxFileSizeSpecified = true;
-                }
-                case "--max-pages" -> {
-                    if (maxPageCountSpecified) {
-                        throw new IllegalArgumentException(
-                                "--max-pages may only be specified once");
-                    }
-                    String value = requireValue(arguments, ++index, argument);
-                    maxPageCount = parsePositiveInt(value, argument);
-                    maxPageCountSpecified = true;
-                }
-                case "--tiny-text-threshold-pt" -> {
-                    if (tinyTextThresholdSpecified) {
-                        throw new IllegalArgumentException(
-                                "--tiny-text-threshold-pt may only be specified once");
-                    }
-                    String value = requireValue(arguments, ++index, argument);
-                    tinyTextThresholdPoints = parseNonNegativeFloat(value, argument);
-                    tinyTextThresholdSpecified = true;
-                }
-                case "--pages" -> {
-                    if (pageSelectionSpecified) {
-                        throw new IllegalArgumentException(
-                                "--pages may only be specified once");
-                    }
-                    String value = requireValue(arguments, ++index, argument);
-                    pageSelection = PageSelection.parse(value);
-                    pageSelectionSpecified = true;
-                }
+                case "--json" -> json = true;
+                case "--max-file-size-mib" -> maxFileSizeBytes = OptionValues.mebibytes(
+                        requireValue(arguments, ++index, argument), argument);
+                case "--max-pages" -> maxPageCount = OptionValues.positiveInt(
+                        requireValue(arguments, ++index, argument), argument);
+                case "--tiny-text-threshold-pt" -> tinyTextThresholdPoints =
+                        OptionValues.nonNegativeFloat(
+                                requireValue(arguments, ++index, argument), argument);
+                case "--pages" -> pageSelection =
+                        PageSelection.parse(requireValue(arguments, ++index, argument));
                 case "--help", "-h", "--version" ->
                         throw new IllegalArgumentException(argument + " must be used alone");
                 default -> {
@@ -130,45 +106,6 @@ record CliOptions(
             throw new IllegalArgumentException(option + " requires a value");
         }
         return arguments[index];
-    }
-
-    private static long parseMebibytes(String value, String option) {
-        try {
-            long mebibytes = Long.parseLong(value);
-            if (mebibytes <= 0) {
-                throw new NumberFormatException();
-            }
-            return Math.multiplyExact(mebibytes, BYTES_PER_MEBIBYTE);
-        } catch (ArithmeticException | NumberFormatException exception) {
-            throw new IllegalArgumentException(
-                    option + " must be a positive integer within the supported range");
-        }
-    }
-
-    private static int parsePositiveInt(String value, String option) {
-        try {
-            int parsed = Integer.parseInt(value);
-            if (parsed <= 0) {
-                throw new NumberFormatException();
-            }
-            return parsed;
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException(
-                    option + " must be a positive integer within the supported range");
-        }
-    }
-
-    private static float parseNonNegativeFloat(String value, String option) {
-        try {
-            float parsed = Float.parseFloat(value);
-            if (!Float.isFinite(parsed) || parsed < 0) {
-                throw new NumberFormatException();
-            }
-            return parsed;
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException(
-                    option + " must be a finite, non-negative number");
-        }
     }
 
     enum Mode {

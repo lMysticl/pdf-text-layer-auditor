@@ -220,11 +220,11 @@ public final class JsonReportPrinter {
         json.append('{');
         appendBooleanProperty(json, "assessed", visual.assessed());
         appendNullableNumberProperty(json, "imageCount", visual.imageCount());
-        appendNullableDecimalProperty(
+        appendNullableNumberProperty(
                 json,
                 "maxImageCoverageRatio",
                 visual.maxImageCoverageRatio());
-        appendNullableDecimalProperty(
+        appendNullableNumberProperty(
                 json,
                 "combinedImageCoverageRatio",
                 visual.combinedImageCoverageRatio());
@@ -236,7 +236,7 @@ public final class JsonReportPrinter {
                 json,
                 "imageTextOverlapGridCellCount",
                 visual.imageTextOverlapGridCellCount());
-        appendNullableDecimalProperty(
+        appendNullableNumberProperty(
                 json,
                 "imageTextOverlapRatio",
                 visual.imageTextOverlapRatio());
@@ -338,8 +338,8 @@ public final class JsonReportPrinter {
         appendPropertyPrefix(json, "spatialEvidence");
         json.append('{');
         appendBooleanProperty(json, "assessed", spatial.assessed());
-        appendNullableDecimalProperty(json, "pageWidthPoints", spatial.pageWidthPoints());
-        appendNullableDecimalProperty(json, "pageHeightPoints", spatial.pageHeightPoints());
+        appendNullableNumberProperty(json, "pageWidthPoints", spatial.pageWidthPoints());
+        appendNullableNumberProperty(json, "pageHeightPoints", spatial.pageHeightPoints());
         appendNullableNumberProperty(json, "rotationDegrees", spatial.rotationDegrees());
         appendNullableStringProperty(json, "coordinateSpace", spatial.coordinateSpace());
         appendNumberProperty(json, "totalLocationCount", spatial.totalLocationCount());
@@ -458,7 +458,7 @@ public final class JsonReportPrinter {
     private static void appendNullableNumberProperty(
             StringBuilder json,
             String name,
-            Integer value
+            Number value
     ) {
         appendPropertyPrefix(json, name);
         if (value == null) {
@@ -483,19 +483,6 @@ public final class JsonReportPrinter {
             json.append("null");
         } else {
             json.append(value);
-        }
-    }
-
-    private static void appendNullableDecimalProperty(
-            StringBuilder json,
-            String name,
-            Double value
-    ) {
-        appendPropertyPrefix(json, name);
-        if (value == null) {
-            json.append("null");
-        } else {
-            json.append(Double.toString(value));
         }
     }
 

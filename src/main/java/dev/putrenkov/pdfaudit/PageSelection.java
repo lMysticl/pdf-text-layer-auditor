@@ -85,14 +85,22 @@ public final class PageSelection {
             }
             return page;
         } catch (NumberFormatException exception) {
-            throw invalidSelection(specification);
+            throw invalidSelection(specification, exception);
         }
     }
 
     private static IllegalArgumentException invalidSelection(String specification) {
+        return invalidSelection(specification, null);
+    }
+
+    private static IllegalArgumentException invalidSelection(
+            String specification,
+            Throwable cause
+    ) {
         return new IllegalArgumentException(
                 "Invalid page selection: " + Objects.toString(specification, "<null>")
-                        + " (expected values such as 1,3-5)");
+                        + " (expected values such as 1,3-5)",
+                cause);
     }
 
     private record Range(int first, int last) {
