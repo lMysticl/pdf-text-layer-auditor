@@ -2,14 +2,11 @@ package dev.putrenkov.pdfaudit;
 
 import java.awt.BasicStroke;
 import java.awt.geom.Area;
-import java.awt.geom.FlatteningPathIterator;
 import java.awt.geom.GeneralPath;
-import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -21,7 +18,6 @@ import org.apache.pdfbox.contentstream.PDFGraphicsStreamEngine;
 import org.apache.pdfbox.contentstream.operator.Operator;
 import org.apache.pdfbox.contentstream.operator.OperatorName;
 import org.apache.pdfbox.cos.COSBase;
-import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSStream;
@@ -34,7 +30,6 @@ import org.apache.pdfbox.pdmodel.graphics.form.PDTransparencyGroup;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImage;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.font.PDFont;
-import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentGroup;
 import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentMembershipDictionary;
 import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentProperties;
 import org.apache.pdfbox.pdmodel.graphics.PDLineDashPattern;
@@ -50,18 +45,17 @@ import org.apache.pdfbox.util.Vector;
 
 final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     private static final int SPATIAL_GRID_SIZE = 8;
-    private static final int TILED_IMAGE_UNION_THRESHOLD = 64;
     private static final int MAX_VISUAL_REGION_SAMPLES = 32;
     private static final COSName OPTIONAL_CONTENT = COSName.getPDFName("OC");
     private static final COSName OPTIONAL_CONTENT_GROUP = COSName.getPDFName("OCG");
     private static final COSName OPTIONAL_CONTENT_MEMBERSHIP = COSName.getPDFName("OCMD");
 
     private final GeneralPath currentPath = new GeneralPath();
-    private final PDOptionalContentProperties optionalContentProperties;
+    private final OptionalContentVisibility optionalContent;
     private final AuditWorkLimits workLimits;
     private int imageCount;
     private double maxImageCoverageRatio;
-    private final AdaptiveAreaUnion combinedImageArea;
+    private final AreaUnion combinedImageArea;
     private final Set<Integer> imageGridCells = new HashSet<>();
     private final Map<VisualRegionType, List<VisualRegion>> visualRegions =
             new EnumMap<>(VisualRegionType.class);
@@ -99,9 +93,9 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
             AuditWorkLimits workLimits
     ) {
         super(page);
-        this.optionalContentProperties = optionalContentProperties;
+        this.optionalContent = new OptionalContentVisibility(optionalContentProperties);
         this.workLimits = workLimits;
-        this.combinedImageArea = new AdaptiveAreaUnion(page.getCropBox());
+        this.combinedImageArea = new AreaUnion(page.getCropBox());
         for (VisualRegionType type : VisualRegionType.values()) {
             visualRegions.put(type, new ArrayList<>());
             visualRegionCounts.put(type, 0L);
@@ -334,7 +328,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         }
 
         double pageAreaValue = cropBox.getWidth() * cropBox.getHeight();
-        double coverage = pageAreaValue <= 0 ? 0 : area(paintedArea) / pageAreaValue;
+        double coverage = pageAreaValue <= 0 ? 0 : AreaUnion.areaOf(paintedArea) / pageAreaValue;
         maxImageCoverageRatio = Math.max(
                 maxImageCoverageRatio,
                 Math.max(0, Math.min(1, coverage)));
@@ -650,12 +644,9 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         if (propertyList instanceof PDOptionalContentMembershipDictionary) {
             optionalContentMembershipReferenceCount++;
         }
-        Boolean hiddenView = isHidden(propertyList, RenderDestination.VIEW, 0,
-                identitySet());
-        Boolean hiddenPrint = isHidden(propertyList, RenderDestination.PRINT, 0,
-                identitySet());
-        Boolean hiddenExport = isHidden(propertyList, RenderDestination.EXPORT, 0,
-                identitySet());
+        Boolean hiddenView = optionalContent.hidden(propertyList, RenderDestination.VIEW);
+        Boolean hiddenPrint = optionalContent.hidden(propertyList, RenderDestination.PRINT);
+        Boolean hiddenExport = optionalContent.hidden(propertyList, RenderDestination.EXPORT);
         hiddenInViewReferenceCount += recordVisibility(hiddenView);
         hiddenInPrintReferenceCount += recordVisibility(hiddenPrint);
         hiddenInExportReferenceCount += recordVisibility(hiddenExport);
@@ -670,127 +661,8 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
     }
 
     private boolean isVisibleInView(PDPropertyList propertyList) {
-        return Boolean.FALSE.equals(isHidden(
-                propertyList,
-                RenderDestination.VIEW,
-                0,
-                identitySet()));
-    }
-
-    private Boolean isHidden(
-            PDPropertyList propertyList,
-            RenderDestination destination,
-            int depth,
-            Set<COSBase> visiting
-    ) {
-        if (depth > 64 || !visiting.add(propertyList.getCOSObject())) {
-            return null;
-        }
-        try {
-            if (propertyList instanceof PDOptionalContentGroup group) {
-                PDOptionalContentGroup.RenderState state = group.getRenderState(destination);
-                if (state != null) {
-                    return state == PDOptionalContentGroup.RenderState.OFF;
-                }
-                return optionalContentProperties != null
-                        && !optionalContentProperties.isGroupEnabled(group);
-            }
-            if (propertyList instanceof PDOptionalContentMembershipDictionary membership) {
-                return isMembershipHidden(membership, destination, depth + 1, visiting);
-            }
-            return false;
-        } catch (RuntimeException exception) {
-            return null;
-        } finally {
-            visiting.remove(propertyList.getCOSObject());
-        }
-    }
-
-    private Boolean isMembershipHidden(
-            PDOptionalContentMembershipDictionary membership,
-            RenderDestination destination,
-            int depth,
-            Set<COSBase> visiting
-    ) {
-        COSArray expression = membership.getCOSObject().getCOSArray(COSName.VE);
-        if (expression != null && expression.size() > 0) {
-            return isExpressionHidden(expression, destination, depth, visiting);
-        }
-        List<PDPropertyList> groups = membership.getOCGs();
-        if (groups.isEmpty()) {
-            return false;
-        }
-        List<Boolean> visible = new ArrayList<>(groups.size());
-        for (PDPropertyList group : groups) {
-            Boolean hidden = isHidden(group, destination, depth, visiting);
-            if (hidden == null) {
-                return null;
-            }
-            visible.add(!hidden);
-        }
-        COSName policy = membership.getVisibilityPolicy();
-        if (COSName.ANY_OFF.equals(policy)) {
-            return visible.stream().allMatch(Boolean::booleanValue);
-        }
-        if (COSName.ALL_ON.equals(policy)) {
-            return visible.stream().anyMatch(value -> !value);
-        }
-        if (COSName.ALL_OFF.equals(policy)) {
-            return visible.stream().anyMatch(Boolean::booleanValue);
-        }
-        return visible.stream().noneMatch(Boolean::booleanValue);
-    }
-
-    private Boolean isExpressionHidden(
-            COSArray expression,
-            RenderDestination destination,
-            int depth,
-            Set<COSBase> visiting
-    ) {
-        if (depth > 64 || !visiting.add(expression)) {
-            return null;
-        }
-        try {
-            if (expression.size() == 0) {
-                return false;
-            }
-            String operator = expression.getName(0);
-            if (operator == null || expression.size() < 2) {
-                return null;
-            }
-            List<Boolean> hidden = new ArrayList<>();
-            for (int index = 1; index < expression.size(); index++) {
-                COSBase operand = expression.getObject(index);
-                Boolean value;
-                if (operand instanceof COSArray nested) {
-                    value = isExpressionHidden(nested, destination, depth + 1, visiting);
-                } else if (operand instanceof COSDictionary dictionary) {
-                    value = isHidden(
-                            PDPropertyList.create(dictionary),
-                            destination,
-                            depth + 1,
-                            visiting);
-                } else {
-                    return null;
-                }
-                if (value == null) {
-                    return null;
-                }
-                hidden.add(value);
-            }
-            return switch (operator) {
-                case "And" -> hidden.stream().anyMatch(Boolean::booleanValue);
-                case "Or" -> hidden.stream().allMatch(Boolean::booleanValue);
-                case "Not" -> hidden.size() == 1 ? !hidden.getFirst() : null;
-                default -> null;
-            };
-        } finally {
-            visiting.remove(expression);
-        }
-    }
-
-    private static Set<COSBase> identitySet() {
-        return Collections.newSetFromMap(new IdentityHashMap<>());
+        return Boolean.FALSE.equals(
+                optionalContent.hidden(propertyList, RenderDestination.VIEW));
     }
 
     private void recordPaintedVectorOperation() {
@@ -800,42 +672,6 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
                     AuditWorkLimitException.Code.PAINTED_VECTOR_PATH_COUNT,
                     workLimits.maximumPaintedVectorPathCount());
         }
-    }
-
-    private static double area(Area area) {
-        FlatteningPathIterator iterator = new FlatteningPathIterator(
-                area.getPathIterator(null), 0.25);
-        double[] coordinates = new double[6];
-        double total = 0;
-        double startX = 0;
-        double startY = 0;
-        double previousX = 0;
-        double previousY = 0;
-        double ring = 0;
-        while (!iterator.isDone()) {
-            int segment = iterator.currentSegment(coordinates);
-            switch (segment) {
-                case PathIterator.SEG_MOVETO -> {
-                    startX = coordinates[0];
-                    startY = coordinates[1];
-                    previousX = startX;
-                    previousY = startY;
-                    ring = 0;
-                }
-                case PathIterator.SEG_LINETO -> {
-                    ring += previousX * coordinates[1] - coordinates[0] * previousY;
-                    previousX = coordinates[0];
-                    previousY = coordinates[1];
-                }
-                case PathIterator.SEG_CLOSE -> {
-                    ring += previousX * startY - startX * previousY;
-                    total += ring / 2;
-                }
-                default -> throw new IllegalStateException("Unexpected flattened path segment");
-            }
-            iterator.next();
-        }
-        return Math.abs(total);
     }
 
     private double combinedImageCoverageRatio() {
@@ -874,11 +710,9 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         }
         PDPropertyList optionalContent = annotation.getOptionalContent();
         if (optionalContent != null) {
-            Boolean hiddenInView = isHidden(
+            Boolean hiddenInView = this.optionalContent.hidden(
                     optionalContent,
-                    RenderDestination.VIEW,
-                    0,
-                    identitySet());
+                    RenderDestination.VIEW);
             if (!Boolean.FALSE.equals(hiddenInView)) {
                 return;
             }
@@ -917,7 +751,7 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         if (paintedArea.isEmpty()) {
             return;
         }
-        VisualRegion region = toDisplayRegion(
+        VisualRegion region = VisualRegion.displayed(
                 type,
                 getPage().getCropBox(),
                 getPage().getRotation(),
@@ -932,99 +766,6 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
         }
     }
 
-    private static VisualRegion toDisplayRegion(
-            VisualRegionType type,
-            PDRectangle crop,
-            int pageRotation,
-            Rectangle2D pdfBounds
-    ) {
-        if (crop == null
-                || pdfBounds == null
-                || pdfBounds.isEmpty()
-                || !Float.isFinite(crop.getLowerLeftX())
-                || !Float.isFinite(crop.getLowerLeftY())
-                || !Float.isFinite(crop.getWidth())
-                || !Float.isFinite(crop.getHeight())
-                || !Double.isFinite(pdfBounds.getMinX())
-                || !Double.isFinite(pdfBounds.getMinY())
-                || !Double.isFinite(pdfBounds.getWidth())
-                || !Double.isFinite(pdfBounds.getHeight())
-                || crop.getWidth() <= 0
-                || crop.getHeight() <= 0) {
-            return null;
-        }
-        int rotation = Math.floorMod(pageRotation, 360);
-        if (rotation % 90 != 0) {
-            return null;
-        }
-        double pdfX = pdfBounds.getMinX() - crop.getLowerLeftX();
-        double pdfY = pdfBounds.getMinY() - crop.getLowerLeftY();
-        double pdfWidth = pdfBounds.getWidth();
-        double pdfHeight = pdfBounds.getHeight();
-        double displayWidth = rotation == 90 || rotation == 270
-                ? crop.getHeight() : crop.getWidth();
-        double displayHeight = rotation == 90 || rotation == 270
-                ? crop.getWidth() : crop.getHeight();
-        double x;
-        double y;
-        double width;
-        double height;
-        switch (rotation) {
-            case 0 -> {
-                x = pdfX;
-                y = displayHeight - (pdfY + pdfHeight);
-                width = pdfWidth;
-                height = pdfHeight;
-            }
-            case 90 -> {
-                x = pdfY;
-                y = pdfX;
-                width = pdfHeight;
-                height = pdfWidth;
-            }
-            case 180 -> {
-                x = displayWidth - (pdfX + pdfWidth);
-                y = pdfY;
-                width = pdfWidth;
-                height = pdfHeight;
-            }
-            case 270 -> {
-                x = displayWidth - (pdfY + pdfHeight);
-                y = displayHeight - (pdfX + pdfWidth);
-                width = pdfHeight;
-                height = pdfWidth;
-            }
-            default -> throw new IllegalStateException("Unexpected normalized page rotation");
-        }
-        double boundedX = Math.max(0, Math.min(x, displayWidth));
-        double boundedY = Math.max(0, Math.min(y, displayHeight));
-        double boundedWidth = Math.max(0, Math.min(width, displayWidth - boundedX));
-        double boundedHeight = Math.max(0, Math.min(height, displayHeight - boundedY));
-        if (boundedWidth <= 0 || boundedHeight <= 0) {
-            return null;
-        }
-        double roundedX = rounded(boundedX);
-        double roundedY = rounded(boundedY);
-        double roundedWidth = rounded(boundedWidth);
-        double roundedHeight = rounded(boundedHeight);
-        if (!Double.isFinite(roundedX)
-                || !Double.isFinite(roundedY)
-                || !Double.isFinite(roundedWidth)
-                || !Double.isFinite(roundedHeight)
-                || roundedX < 0
-                || roundedY < 0
-                || roundedWidth <= 0
-                || roundedHeight <= 0) {
-            return null;
-        }
-        return new VisualRegion(
-                type,
-                roundedX,
-                roundedY,
-                roundedWidth,
-                roundedHeight);
-    }
-
     private VisualRegionAudit visualRegionAudit() {
         VisualRegionCounts counts = new VisualRegionCounts(
                 visualRegionCounts.get(VisualRegionType.IMAGE),
@@ -1036,10 +777,6 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
             samples.addAll(visualRegions.get(type));
         }
         return VisualRegionAudit.of(counts, samples);
-    }
-
-    private static double rounded(double value) {
-        return Math.rint(value * 1_000d) / 1_000d;
     }
 
     private void recordVisibleTextGridCell(double x, double y) {
@@ -1093,110 +830,4 @@ final class PageVisualAnalyzer extends PDFGraphicsStreamEngine {
      * The cells partition the page, so their union areas can be summed without
      * overlap or approximation.
      */
-    private static final class AdaptiveAreaUnion {
-        private final PDRectangle crop;
-        private Area sequential = new Area();
-        private TiledAreaUnion tiled;
-        private int additions;
-
-        private AdaptiveAreaUnion(PDRectangle crop) {
-            this.crop = crop;
-        }
-
-        private void add(Area paintedArea) {
-            additions++;
-            if (tiled == null) {
-                sequential.add(paintedArea);
-                if (additions > TILED_IMAGE_UNION_THRESHOLD) {
-                    tiled = new TiledAreaUnion(crop);
-                    tiled.add(sequential);
-                    sequential = null;
-                }
-                return;
-            }
-            tiled.add(paintedArea);
-        }
-
-        private double area() {
-            return tiled == null
-                    ? PageVisualAnalyzer.area(sequential)
-                    : tiled.area();
-        }
-    }
-
-    private static final class TiledAreaUnion {
-        private final Rectangle2D.Double[] cells;
-        private final Area[] unions;
-        private final double originX;
-        private final double originY;
-        private final double cellWidth;
-        private final double cellHeight;
-
-        private TiledAreaUnion(PDRectangle crop) {
-            cells = new Rectangle2D.Double[SPATIAL_GRID_SIZE * SPATIAL_GRID_SIZE];
-            unions = new Area[cells.length];
-            originX = crop.getLowerLeftX();
-            originY = crop.getLowerLeftY();
-            cellWidth = crop.getWidth() / SPATIAL_GRID_SIZE;
-            cellHeight = crop.getHeight() / SPATIAL_GRID_SIZE;
-            if (cellWidth <= 0 || cellHeight <= 0) {
-                return;
-            }
-            for (int row = 0; row < SPATIAL_GRID_SIZE; row++) {
-                for (int column = 0; column < SPATIAL_GRID_SIZE; column++) {
-                    int index = row * SPATIAL_GRID_SIZE + column;
-                    cells[index] = new Rectangle2D.Double(
-                            originX + column * cellWidth,
-                            originY + row * cellHeight,
-                            cellWidth,
-                            cellHeight);
-                }
-            }
-        }
-
-        private void add(Area paintedArea) {
-            if (cellWidth <= 0 || cellHeight <= 0 || paintedArea.isEmpty()) {
-                return;
-            }
-            Rectangle2D bounds = paintedArea.getBounds2D();
-            int firstColumn = cellIndex(bounds.getMinX(), originX, cellWidth);
-            int lastColumn = cellIndex(Math.nextDown(bounds.getMaxX()), originX, cellWidth);
-            int firstRow = cellIndex(bounds.getMinY(), originY, cellHeight);
-            int lastRow = cellIndex(Math.nextDown(bounds.getMaxY()), originY, cellHeight);
-            for (int row = firstRow; row <= lastRow; row++) {
-                for (int column = firstColumn; column <= lastColumn; column++) {
-                    int index = row * SPATIAL_GRID_SIZE + column;
-                    Rectangle2D cell = cells[index];
-                    if (!paintedArea.intersects(cell)) {
-                        continue;
-                    }
-                    Area clipped = new Area(paintedArea);
-                    clipped.intersect(new Area(cell));
-                    if (clipped.isEmpty()) {
-                        continue;
-                    }
-                    if (unions[index] == null) {
-                        unions[index] = clipped;
-                    } else {
-                        unions[index].add(clipped);
-                    }
-                }
-            }
-        }
-
-        private double area() {
-            double total = 0;
-            for (Area union : unions) {
-                if (union != null) {
-                    total += PageVisualAnalyzer.area(union);
-                }
-            }
-            return total;
-        }
-
-        private static int cellIndex(double coordinate, double origin, double size) {
-            int index = (int) Math.floor((coordinate - origin) / size);
-            return Math.max(0, Math.min(SPATIAL_GRID_SIZE - 1, index));
-        }
-    }
 }

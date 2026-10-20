@@ -552,15 +552,7 @@ public final class PdfTextLayerAuditor {
                             AuditWorkLimitException.Code.FONT_COUNT,
                             workLimits.maximumFontCount());
                 }
-                fontAudit = new MutableFont(
-                            fontName,
-                            descriptor.subtype(),
-                            descriptor.encoding(),
-                            embedded,
-                            damaged,
-                            descriptor.vertical(),
-                            descriptor.toUnicodePresent(),
-                            descriptor.subset());
+                fontAudit = new MutableFont(key);
                 fonts.put(key, fontAudit);
             }
             fontAudit.glyphCount++;
@@ -984,47 +976,24 @@ public final class PdfTextLayerAuditor {
     }
 
     private static final class MutableFont {
-        private final String name;
-        private final String subtype;
-        private final String encoding;
-        private final boolean embedded;
-        private final boolean damaged;
-        private final boolean vertical;
-        private final boolean toUnicodePresent;
-        private final boolean subset;
+        private final FontKey key;
         private int glyphCount;
         private int rawUnmappedGlyphCount;
 
-        private MutableFont(
-                String name,
-                String subtype,
-                String encoding,
-                boolean embedded,
-                boolean damaged,
-                boolean vertical,
-                boolean toUnicodePresent,
-                boolean subset
-        ) {
-            this.name = name;
-            this.subtype = subtype;
-            this.encoding = encoding;
-            this.embedded = embedded;
-            this.damaged = damaged;
-            this.vertical = vertical;
-            this.toUnicodePresent = toUnicodePresent;
-            this.subset = subset;
+        private MutableFont(FontKey key) {
+            this.key = key;
         }
 
         private FontAudit freeze() {
             return new FontAudit(
-                    name,
-                    subtype,
-                    encoding,
-                    embedded,
-                    damaged,
-                    vertical,
-                    toUnicodePresent,
-                    subset,
+                    key.name(),
+                    key.subtype(),
+                    key.encoding(),
+                    key.embedded(),
+                    key.damaged(),
+                    key.vertical(),
+                    key.toUnicodePresent(),
+                    key.subset(),
                     glyphCount,
                     rawUnmappedGlyphCount);
         }
