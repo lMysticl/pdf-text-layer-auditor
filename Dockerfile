@@ -5,7 +5,7 @@ COPY pom.xml LICENSE ./
 COPY src ./src
 RUN mvn --batch-mode --no-transfer-progress -DskipTests package
 
-FROM eclipse-temurin:21-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c
+FROM eclipse-temurin:21-jre-noble@sha256:35501d3f93173b420ac9001658eb68157e813316b865087e345c187fca422c4c
 
 LABEL org.opencontainers.image.title="PDF Text Layer Audit"
 LABEL org.opencontainers.image.description="Audit changed PDF files in GitHub pull requests"
